@@ -18,14 +18,14 @@ export function NewsDetailDialog() {
       {detailItem && (
         <div className="flex flex-col">
           <div className="flex items-start justify-between gap-3 border-b border-rule px-5 py-4">
-            <h2 id="news-detail-title" className="font-serif text-xl font-700 leading-snug">
+            <h2 id="news-detail-title" className="font-serif text-2xl sm:text-[32px] font-700 leading-tight">
               {detailItem.title}
             </h2>
             <button
               type="button"
               onClick={closeDetail}
               aria-label="Close"
-              className="shrink-0 border border-ink/30 px-2 py-1 text-xs text-ink/60 hover:border-ink hover:text-ink"
+              className="shrink-0 border border-ink/30 px-2.5 py-1.5 text-xs text-ink/60 hover:border-ink hover:text-ink"
             >
               Close
             </button>
@@ -42,15 +42,14 @@ export function NewsDetailDialog() {
               )}
               <span aria-hidden>&middot;</span>
               <span>
-                {relativeTime(detailItem.publishedAt)} &middot; {clockTime(detailItem.publishedAt)}
+                {relativeTime(detailItem.publishedAt)} &middot; {clockTime(detailItem.publishedAt)} (Europe/Berlin)
               </span>
               <span aria-hidden>&middot;</span>
               <span className="border border-ink/30 px-1 rounded-sm">EN</span>
-              <span className="text-ink/50">No official confirmation</span>
             </div>
 
             {detailItem.assets.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 {detailItem.assets.map((symbol) => (
                   <span
                     key={symbol}
@@ -59,17 +58,6 @@ export function NewsDetailDialog() {
                     {symbol}
                   </span>
                 ))}
-                {detailItem.assets
-                  .filter((symbol) => ANALYTICS_ASSETS.has(symbol))
-                  .map((symbol) => (
-                    <Link
-                      key={symbol}
-                      href={`/en/analytics?asset=${symbol}&tab=price-action&interval=4h`}
-                      className="text-[11px] font-semibold text-ink underline decoration-accent decoration-2 underline-offset-2 hover:decoration-ink"
-                    >
-                      View {symbol} analytics
-                    </Link>
-                  ))}
               </div>
             )}
 
@@ -81,7 +69,7 @@ export function NewsDetailDialog() {
 
             <NewsInsights item={detailItem} />
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-3 pt-2">
               <a
                 href={detailItem.url}
                 target="_blank"
@@ -91,6 +79,17 @@ export function NewsDetailDialog() {
                 Read original
               </a>
               <SaveButton item={detailItem} />
+              {detailItem.assets
+                .filter((symbol) => ANALYTICS_ASSETS.has(symbol))
+                .map((symbol) => (
+                  <Link
+                    key={symbol}
+                    href={`/en/analytics?asset=${symbol}&tab=price-action&interval=4h`}
+                    className="text-xs font-semibold text-ink underline decoration-accent decoration-2 underline-offset-2 hover:decoration-ink"
+                  >
+                    View {symbol} analytics
+                  </Link>
+                ))}
             </div>
           </div>
         </div>
