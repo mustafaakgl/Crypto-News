@@ -1,0 +1,100 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { Modal } from "@/components/Modal";
+import { SaveButton } from "@/components/SaveButton";
+import { NewsInsights } from "@/components/NewsInsights";
+import { useNewsInteraction } from "@/components/NewsInteractionContext";
+import { relativeTime, clockTime } from "@/lib/time";
+
+const ANALYTICS_ASSETS = new Set(["BTC", "ETH"]);
+
+export function NewsDetailDialog() {
+  const { detailItem, closeDetail } = useNewsInteraction();
+
+  return (
+    <Modal open={detailItem !== null} onClose={closeDetail} titleId="news-detail-title">
+      {detailItem && (
+        <div className="flex flex-col">
+          <div className="flex items-start justify-between gap-3 border-b border-rule px-5 py-4">
+            <h2 id="news-detail-title" className="font-serif text-xl font-700 leading-snug">
+              {detailItem.title}
+            </h2>
+            <button
+              type="button"
+              onClick={closeDetail}
+              aria-label="Close"
+              className="shrink-0 border border-ink/30 px-2 py-1 text-xs text-ink/60 hover:border-ink hover:text-ink"
+            >
+              Close
+            </button>
+          </div>
+
+          <div className="px-5 py-4 space-y-4">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink/60">
+              <span className="font-semibold text-ink/80">{detailItem.sourceName}</span>
+              {detailItem.author && (
+                <>
+                  <span aria-hidden>&middot;</span>
+                  <span>By {detailItem.author}</span>
+                </>
+              )}
+              <span aria-hidden>&middot;</span>
+              <span>
+                {relativeTime(detailItem.publishedAt)} &middot; {clockTime(detailItem.publishedAt)}
+              </span>
+              <span aria-hidden>&middot;</span>
+              <span className="border border-ink/30 px-1 rounded-sm">EN</span>
+              <span className="text-ink/50">No official confirmation</span>
+            </div>
+
+            {detailItem.assets.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                {detailItem.assets.map((symbol) => (
+                  <span
+                    key={symbol}
+                    className="bg-accent/20 border border-accent px-1.5 py-0.5 text-[11px] font-semibold"
+                  >
+                    {symbol}
+                  </span>
+                ))}
+                {detailItem.assets
+                  .filter((symbol) => ANALYTICS_ASSETS.has(symbol))
+                  .map((symbol) => (
+                    <Link
+                      key={symbol}
+                      href={`/en/analytics?asset=${symbol}&tab=price-action&interval=4h`}
+                      className="text-[11px] font-semibold text-ink underline decoration-accent decoration-2 underline-offset-2 hover:decoration-ink"
+                    >
+                      View {symbol} analytics
+                    </Link>
+                  ))}
+              </div>
+            )}
+
+            {detailItem.imageRightsVerified && detailItem.imageUrl && (
+              <div className="relative w-full aspect-[16/10] bg-ink overflow-hidden">
+                <Image src={detailItem.imageUrl} alt="" fill sizes="576px" className="object-cover" />
+              </div>
+            )}
+
+            <NewsInsights item={detailItem} />
+
+            <div className="flex items-center gap-3 pt-2">
+              <a
+                href={detailItem.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="border border-ink bg-ink text-paper px-3 py-2 text-xs font-semibold uppercase tracking-wide hover:bg-ink/80"
+              >
+                Read original
+              </a>
+              <SaveButton item={detailItem} />
+            </div>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}

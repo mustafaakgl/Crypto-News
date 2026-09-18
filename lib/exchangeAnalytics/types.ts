@@ -1,0 +1,70 @@
+export type ExchangePeriod = "1d" | "7d" | "30d" | "1y";
+
+export const EXCHANGE_PERIODS: ExchangePeriod[] = ["1d", "7d", "30d", "1y"];
+
+export const EXCHANGE_PERIOD_LABEL: Record<ExchangePeriod, string> = {
+  "1d": "1D",
+  "7d": "7D",
+  "30d": "30D",
+  "1y": "1Y",
+};
+
+export type VenueCount = 5 | 10;
+
+// "trailing_24h" — a rolling window ending now, not a calendar-period sum
+// (only ever true for the 1d period). "period_total" — a genuine sum of
+// non-overlapping daily buckets covering the exact UTC window below.
+export type VolumeKind = "trailing_24h" | "period_total";
+
+export type CexVenue = {
+  id: string;
+  name: string;
+  url: string;
+  image: string | null;
+  trustScore: number | null; // CoinGecko's own 0-10 score — surfaced, never used to silently exclude a venue
+  trustScoreRank: number | null;
+  volumeBtc: number;
+  volumeKind: VolumeKind;
+  volumeUsd: number | null; // null only if BTC/USD price history was unavailable
+  usdRateBasis: "current_rate" | "daily_historical_rate" | null;
+  periodStart: string; // ISO
+  periodEnd: string; // ISO
+};
+
+export type CexOverviewResult = {
+  period: ExchangePeriod;
+  venues: CexVenue[];
+  rankingPoolSize: number; // how many CoinGecko-listed exchanges were considered for ranking
+  asOf: string; // ISO — when this server actually fetched the ranking pool
+  warnings: string[];
+};
+
+export type DexProtocol = {
+  id: string;
+  name: string;
+  chains: string[];
+  volumeUsd: number;
+  change1d: number | null;
+};
+
+export type DexOverviewResult = {
+  period: ExchangePeriod;
+  totalVolumeUsd: number | null; // DefiLlama's OWN top-level total for the period — never re-derived by summing protocols
+  protocols: DexProtocol[];
+  protocolPoolSize: number;
+  asOf: string;
+  warnings: string[];
+};
+
+export type QuoteCurrencyType = "fiat" | "stablecoin" | "crypto";
+
+export type PairBreakdownEntry = { key: string; volumeUsd: number };
+
+export type CexTickerBreakdown = {
+  exchangeId: string;
+  byBaseAsset: PairBreakdownEntry[]; // BTC / ETH / SOL / Other
+  byQuoteType: PairBreakdownEntry[]; // fiat / stablecoin / crypto
+  pairsConsidered: number;
+  coverageNote: string;
+  asOf: string;
+};

@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+.env
+.env.local
+npm-debug.log*
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# Licensed source material (PDF, extracted text, retrieval index) for the
+# Price Action RAG feature — never committed, never served publicly.
+data/knowledge/

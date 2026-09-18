@@ -1,0 +1,6 @@
+<svg width="800" height="500" viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="500" fill="#111111"/>
+  <rect x="0" y="0" width="800" height="500" fill="none" stroke="#fdc800" stroke-width="10"/>
+  <text x="400" y="235" font-family="Georgia, serif" font-size="40" fill="#fdc800" text-anchor="middle">Kripto Brifing</text>
+  <text x="400" y="280" font-family="Helvetica, Arial, sans-serif" font-size="18" fill="#ffffff" text-anchor="middle">No image available</text>
+</svg>
