@@ -3,10 +3,9 @@ import { fetchJson, COINGECKO_PACE_KEY, COINGECKO_MIN_INTERVAL_MS } from "@/lib/
 import {
   daysParamForPeriod,
   volumeKindForPeriod,
-  prepareDailySeries,
+  latestCompleteDailyPoint,
   trailing24hWindow,
-  sumVolumeBtc,
-  sumVolumeUsdWithHistoricalRates,
+  snapshotWindow,
   priceAtOrBefore,
   type VolumePoint,
 } from "@/lib/exchangeAnalytics/periodMath";
@@ -60,7 +59,7 @@ async function fetchRankingPool(): Promise<{ pool: RawExchange[]; warnings: stri
   return { pool: result.data.filter(isRawExchange), warnings };
 }
 
-async function fetchBtcUsdPriceHistory(days: 1 | 30 | 365): Promise<[number, number][]> {
+async function fetchBtcUsdPriceHistory(days: 1 | 30): Promise<[number, number][]> {
   const result = await fetchJson(`${CG_BASE}/coins/bitcoin/market_chart?vs_currency=usd&days=${days}`, "CoinGecko BTC/USD price history", HISTORY_REVALIDATE_SECONDS, PACED);
   if (!result.ok) return [];
   const data = result.data as { prices?: unknown };
@@ -70,7 +69,7 @@ async function fetchBtcUsdPriceHistory(days: 1 | 30 | 365): Promise<[number, num
   );
 }
 
-async function fetchVenueVolumeChart(id: string, days: 1 | 30 | 365): Promise<VolumePoint[]> {
+async function fetchVenueVolumeChart(id: string, days: 1 | 30): Promise<VolumePoint[]> {
   const result = await fetchJson(`${CG_BASE}/exchanges/${id}/volume_chart?days=${days}`, `CoinGecko volume chart (${id})`, HISTORY_REVALIDATE_SECONDS, PACED);
   if (!result.ok || !Array.isArray(result.data)) return [];
   return result.data
@@ -81,23 +80,11 @@ async function fetchVenueVolumeChart(id: string, days: 1 | 30 | 365): Promise<Vo
 
 const overviewCache = new TtlCache<CexOverviewResult>();
 
-// Sorts period_total venues first (by their verified period volume), then
-// unverified_daily_snapshot venues after (by their single-day volume) —
-// never interleaved by raw volumeBtc, since a 30-day sum and a single
-// day's snapshot are not the same unit and mixing them in one ranking
-// would misrepresent both.
-function rankVenues(venues: CexVenue[]): CexVenue[] {
-  const rank = (k: CexVenue["volumeKind"]) => (k === "unverified_daily_snapshot" ? 1 : 0);
-  return [...venues].sort((a, b) => rank(a.volumeKind) - rank(b.volumeKind) || b.volumeBtc - a.volumeBtc);
-}
-
 // Venues are SELECTED using the cheap, always-available 24h reported
 // volume (one list call) — so for 7D/30D/1Y, the CANDIDATE pool is drawn
-// from today's top-N by 24h volume, not the true top-N over that longer
-// window; a venue outside today's top N that ranked higher over the full
-// period would not be captured. That scope is surfaced in the UI, never
-// hidden. Only after that selection is each candidate's own real period
-// history fetched to rank and total them accurately among themselves.
+// from today's top-N by 24h volume, not a true top-N over any longer
+// window (no such verified window exists — see periodMath.ts). That scope
+// is surfaced in the UI, never hidden.
 async function computeCexOverview(period: ExchangePeriod, count: VenueCount): Promise<CexOverviewResult> {
   const warnings: string[] = [];
   const { pool, warnings: poolWarnings } = await fetchRankingPool();
@@ -138,47 +125,20 @@ async function computeCexOverview(period: ExchangePeriod, count: VenueCount): Pr
       continue;
     }
 
+    // 7D/30D/1Y all resolve to the SAME thing today: the single most
+    // recent verifiably-complete daily observation, never a multi-day sum
+    // (see periodMath.ts for why). The period buttons still matter for
+    // Flows and will matter again for Volume once the source's timestamp
+    // semantics are actually confirmed — this is a deliberately-kept
+    // limitation, not a bug.
     const rawPoints = await fetchVenueVolumeChart(ex.id, days);
-    if (rawPoints.length === 0) {
-      warnings.push(`${ex.name}: volume history unavailable for this period.`);
+    const point = latestCompleteDailyPoint(rawPoints, now);
+    if (!point) {
+      warnings.push(`${ex.name}: no completed daily volume data available.`);
       continue;
     }
-
-    const prepared = prepareDailySeries(rawPoints, period, now);
-
-    if (!prepared.verified) {
-      if (!prepared.latestCompletePoint) {
-        warnings.push(`${ex.name}: no completed daily data available for this period.`);
-        continue;
-      }
-      // Fall back to the single latest COMPLETE day's snapshot rather than
-      // summing a series that failed verification (gap, duplicate, or too
-      // few completed days) — never presented as a period total.
-      const point = prepared.latestCompletePoint;
-      const dayMs = 86_400_000;
-      const price = priceHistory.length > 0 ? priceAtOrBefore(priceHistory, point.timestampMs) : null;
-      warnings.push(`${ex.name}: ${period} total could not be verified (${prepared.reason}) — showing latest complete day's snapshot instead.`);
-      venues.push({
-        id: ex.id,
-        name: ex.name,
-        url: ex.url,
-        image: ex.image,
-        trustScore: ex.trust_score,
-        trustScoreRank: ex.trust_score_rank,
-        volumeBtc: point.volumeBtc,
-        volumeKind: "unverified_daily_snapshot",
-        volumeUsd: price !== null ? point.volumeBtc * price : null,
-        usdRateBasis: price !== null ? "daily_historical_rate" : null,
-        periodStart: new Date(point.timestampMs).toISOString(),
-        periodEnd: new Date(point.timestampMs + dayMs).toISOString(),
-      });
-      continue;
-    }
-
-    const sliced = prepared.points;
-    const btcTotal = sumVolumeBtc(sliced);
-    const usdTotal = priceHistory.length > 0 ? sumVolumeUsdWithHistoricalRates(sliced, priceHistory) : null;
-    const dayMs = 86_400_000;
+    const window = snapshotWindow(point);
+    const price = priceHistory.length > 0 ? priceAtOrBefore(priceHistory, point.timestampMs) : null;
     venues.push({
       id: ex.id,
       name: ex.name,
@@ -186,16 +146,30 @@ async function computeCexOverview(period: ExchangePeriod, count: VenueCount): Pr
       image: ex.image,
       trustScore: ex.trust_score,
       trustScoreRank: ex.trust_score_rank,
-      volumeBtc: btcTotal,
+      volumeBtc: point.volumeBtc,
       volumeKind,
-      volumeUsd: usdTotal,
-      usdRateBasis: usdTotal !== null ? "daily_historical_rate" : null,
-      periodStart: new Date(sliced[0].timestampMs).toISOString(),
-      periodEnd: new Date(sliced[sliced.length - 1].timestampMs + dayMs).toISOString(),
+      volumeUsd: price !== null ? point.volumeBtc * price : null,
+      usdRateBasis: price !== null ? "daily_historical_rate" : null,
+      periodStart: new Date(window.startMs).toISOString(),
+      periodEnd: new Date(window.endMs).toISOString(),
     });
   }
 
-  return { period, venues: rankVenues(venues), rankingPoolSize: pool.length, asOf: new Date().toISOString(), warnings };
+  venues.sort((a, b) => b.volumeBtc - a.volumeBtc);
+  return { period, venues, rankingPoolSize: pool.length, asOf: new Date().toISOString(), warnings };
+}
+
+// Shared with Exchange Flows (lib/exchangeFlows) so venue SELECTION stays
+// consistent across both tabs — Flows never invents its own top-N logic
+// that could silently diverge from what Volume shows for the "same"
+// selection. Same today's-24h-volume ranking basis as computeCexOverview
+// above; that scope limitation applies here too.
+export async function getCandidateVenues(count: VenueCount): Promise<{ id: string; name: string }[]> {
+  const { pool } = await fetchRankingPool();
+  return [...pool]
+    .sort((a, b) => b.trade_volume_24h_btc - a.trade_volume_24h_btc)
+    .slice(0, count)
+    .map((ex) => ({ id: ex.id, name: ex.name }));
 }
 
 export async function getCexOverview(period: ExchangePeriod, count: VenueCount): Promise<StaleAwareResult<CexOverviewResult>> {

@@ -11,17 +11,14 @@ export const EXCHANGE_PERIOD_LABEL: Record<ExchangePeriod, string> = {
 
 export type VenueCount = 5 | 10;
 
-// "trailing_24h" — a rolling window ending now, not a calendar-period sum
-// (only ever true for the 1d period). "period_total" — a genuine sum of
-// non-overlapping daily buckets covering the exact UTC window below,
-// verified at runtime (see periodMath.validateDailySeries) to actually be
-// complete and non-overlapping — never assumed just because the right
-// `days` value was requested. "unverified_daily_snapshot" — the daily
-// series for this venue/period failed that verification (a gap, a
-// duplicate, or too few completed days); rather than sum something that
-// might double-count or under-count, only the single latest COMPLETE
-// day's volume is shown, explicitly not a period total.
-export type VolumeKind = "trailing_24h" | "period_total" | "unverified_daily_snapshot";
+// "trailing_24h" — a rolling window ending now (only ever true for the 1d
+// period). "historical_snapshot" — CoinGecko doesn't document what a daily
+// volume_chart point's timestamp actually marks (period start, period end,
+// or observation time — see periodMath.ts), so 7D/30D/1Y never sum
+// multiple days into a period total; each of those periods instead shows
+// the single most recent verifiably-COMPLETE day's volume, labeled as a
+// snapshot rather than a period figure.
+export type VolumeKind = "trailing_24h" | "historical_snapshot";
 
 export type CexVenue = {
   id: string;
