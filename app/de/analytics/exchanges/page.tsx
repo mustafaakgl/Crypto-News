@@ -1,5 +1,5 @@
 import { ExchangeAnalyticsPageContent } from "@/components/pages/ExchangeAnalyticsPageContent";
 
 export default function ExchangeAnalyticsPage() {
-  return <ExchangeAnalyticsPageContent locale="en" />;
+  return <ExchangeAnalyticsPageContent locale="de" />;
 }

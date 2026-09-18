@@ -1,14 +1,20 @@
 import { utcDateTime } from "@/lib/time";
+import type { Locale } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 export function Sparkline({
   points,
   label,
+  locale = "en",
 }: {
   points: { time: number; value: number }[];
   label: string;
+  locale?: Locale;
 }) {
+  const dict = getDictionary(locale);
+
   if (points.length < 2) {
-    return <p className="text-xs text-ink/50 py-4">Not enough history to draw a chart yet.</p>;
+    return <p className="text-xs text-ink/50 py-4">{dict.sparkline.notEnoughHistory}</p>;
   }
 
   const width = 600;
@@ -36,7 +42,7 @@ export function Sparkline({
         preserveAspectRatio="none"
         className="w-full h-24"
         role="img"
-        aria-label={`${label}: from ${first.value.toFixed(2)} to ${last.value.toFixed(2)}`}
+        aria-label={dict.sparkline.fromTo(label, first.value.toFixed(2), last.value.toFixed(2))}
       >
         <polyline points={coords.join(" ")} fill="none" stroke="#fdc800" strokeWidth={2} />
       </svg>

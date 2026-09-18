@@ -1,13 +1,16 @@
 "use client";
 
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import type { NewsItem } from "@/lib/news";
 import { NewsMeta } from "@/components/NewsMeta";
 import { SaveButton } from "@/components/SaveButton";
 import { useNewsInteraction } from "@/components/NewsInteractionContext";
+import { localeFromPathname } from "@/lib/i18n/locale";
 
 export function FeaturedStory({ item }: { item: NewsItem }) {
   const { openDetail } = useNewsInteraction();
+  const locale = localeFromPathname(usePathname());
   const showSourceImage = item.imageRightsVerified && item.imageUrl;
 
   return (
@@ -29,7 +32,7 @@ export function FeaturedStory({ item }: { item: NewsItem }) {
         <p className="mt-2 text-sm text-ink/70 leading-snug">{item.summary}</p>
       </button>
       <div className="mt-2 flex items-center justify-between gap-3">
-        <NewsMeta sourceName={item.sourceName} publishedAt={item.publishedAt} assets={item.assets} />
+        <NewsMeta sourceName={item.sourceName} publishedAt={item.publishedAt} assets={item.assets} locale={locale} />
         <SaveButton item={item} />
       </div>
     </div>

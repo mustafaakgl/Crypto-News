@@ -2,16 +2,21 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Modal } from "@/components/Modal";
 import { SaveButton } from "@/components/SaveButton";
 import { NewsInsights } from "@/components/NewsInsights";
 import { useNewsInteraction } from "@/components/NewsInteractionContext";
 import { relativeTime, clockTime } from "@/lib/time";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 const ANALYTICS_ASSETS = new Set(["BTC", "ETH"]);
 
 export function NewsDetailDialog() {
   const { detailItem, closeDetail } = useNewsInteraction();
+  const locale = localeFromPathname(usePathname());
+  const dict = getDictionary(locale);
 
   return (
     <Modal open={detailItem !== null} onClose={closeDetail} titleId="news-detail-title">
@@ -24,10 +29,10 @@ export function NewsDetailDialog() {
             <button
               type="button"
               onClick={closeDetail}
-              aria-label="Close"
+              aria-label={dict.common.close}
               className="shrink-0 border border-ink/30 px-2.5 py-1.5 text-xs text-ink/60 hover:border-ink hover:text-ink"
             >
-              Close
+              {dict.common.close}
             </button>
           </div>
 
@@ -37,7 +42,7 @@ export function NewsDetailDialog() {
               {detailItem.author && (
                 <>
                   <span aria-hidden>&middot;</span>
-                  <span>By {detailItem.author}</span>
+                  <span>{dict.news.byAuthor(detailItem.author)}</span>
                 </>
               )}
               <span aria-hidden>&middot;</span>
@@ -45,7 +50,7 @@ export function NewsDetailDialog() {
                 {relativeTime(detailItem.publishedAt)} &middot; {clockTime(detailItem.publishedAt)} (Europe/Berlin)
               </span>
               <span aria-hidden>&middot;</span>
-              <span className="border border-ink/30 px-1 rounded-sm">EN</span>
+              <span className="border border-ink/30 px-1 rounded-sm">{dict.common.languageTag(locale)}</span>
             </div>
 
             {detailItem.assets.length > 0 && (
@@ -76,7 +81,7 @@ export function NewsDetailDialog() {
                 rel="noopener noreferrer"
                 className="border border-ink bg-ink text-paper px-3 py-2 text-xs font-semibold uppercase tracking-wide hover:bg-ink/80"
               >
-                Read original
+                {dict.common.readOriginal}
               </a>
               <SaveButton item={detailItem} />
               {detailItem.assets
@@ -84,10 +89,10 @@ export function NewsDetailDialog() {
                 .map((symbol) => (
                   <Link
                     key={symbol}
-                    href={`/en/analytics?asset=${symbol}&tab=price-action&interval=4h`}
+                    href={`/${locale}/analytics?asset=${symbol}&tab=price-action&interval=4h`}
                     className="text-xs font-semibold text-ink underline decoration-accent decoration-2 underline-offset-2 hover:decoration-ink"
                   >
-                    View {symbol} analytics
+                    {dict.newsDetail.viewAnalytics(symbol)}
                   </Link>
                 ))}
             </div>

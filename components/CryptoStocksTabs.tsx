@@ -1,9 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import type { MarketAsset } from "@/lib/prices";
 import { PriceStrip } from "@/components/PriceStrip";
 import { StocksWidget } from "@/components/StocksWidget";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 export function CryptoStocksTabs({
   assets,
@@ -16,6 +19,8 @@ export function CryptoStocksTabs({
 }) {
   const [tab, setTab] = useState<"crypto" | "stocks">("crypto");
   const [stocksMounted, setStocksMounted] = useState(false);
+  const locale = localeFromPathname(usePathname());
+  const dict = getDictionary(locale);
 
   function selectStocks() {
     setTab("stocks");
@@ -24,7 +29,7 @@ export function CryptoStocksTabs({
 
   return (
     <div>
-      <div role="tablist" aria-label="Price category" className="flex gap-1 mb-2">
+      <div role="tablist" aria-label={dict.prices.ariaPriceCategory} className="flex gap-1 mb-2">
         <button
           type="button"
           role="tab"
@@ -34,7 +39,7 @@ export function CryptoStocksTabs({
             tab === "crypto" ? "bg-ink text-paper border-ink" : "border-ink/30 text-ink/60 hover:border-ink"
           }`}
         >
-          Crypto
+          {dict.prices.tabCrypto}
         </button>
         <button
           type="button"
@@ -45,15 +50,15 @@ export function CryptoStocksTabs({
             tab === "stocks" ? "bg-ink text-paper border-ink" : "border-ink/30 text-ink/60 hover:border-ink"
           }`}
         >
-          Stocks
+          {dict.prices.tabStocks}
         </button>
       </div>
 
       <div role="tabpanel" hidden={tab !== "crypto"}>
-        <PriceStrip assets={assets} asOf={asOf} error={error} />
+        <PriceStrip assets={assets} asOf={asOf} error={error} locale={locale} />
       </div>
       <div role="tabpanel" hidden={tab !== "stocks"}>
-        {stocksMounted && <StocksWidget />}
+        {stocksMounted && <StocksWidget locale={locale} />}
       </div>
     </div>
   );

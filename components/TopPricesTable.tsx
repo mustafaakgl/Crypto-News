@@ -2,44 +2,50 @@ import Image from "next/image";
 import type { MarketAsset } from "@/lib/prices";
 import { clockTime } from "@/lib/time";
 import { formatUsd, formatPct, formatMarketCap } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 export function TopPricesTable({
   assets,
   asOf,
   error,
+  locale = "en",
 }: {
   assets: MarketAsset[];
   asOf: string | null;
   error: string | null;
+  locale?: Locale;
 }) {
+  const dict = getDictionary(locale);
+  const t = dict.prices;
+  const newsHref = `/${locale}/latest-crypto-news`;
+
   return (
-    <section aria-label="Cryptocurrency prices" className="mt-10 border-t border-rule pt-6">
+    <section aria-label={t.ariaCryptocurrencyPrices} className="mt-10 border-t border-rule pt-6">
       <div className="flex items-baseline justify-between border-b-2 border-ink pb-2 mb-1">
-        <h2 className="font-serif text-sm font-700 uppercase tracking-widest">Cryptocurrency Prices</h2>
+        <h2 className="font-serif text-sm font-700 uppercase tracking-widest">{t.cryptocurrencyPrices}</h2>
         <a
-          href="/en/prices"
+          href={`/${locale}/prices`}
           className="text-xs font-semibold text-ink/60 hover:text-ink hover:underline decoration-accent decoration-2 underline-offset-4"
         >
-          View all prices →
+          {t.viewAllPrices}
         </a>
       </div>
 
       {error || assets.length === 0 ? (
-        <p className="border border-ink/20 px-4 py-6 text-center text-ink/60 text-sm">
-          CoinGecko could not be reached — prices temporarily unavailable.
-        </p>
+        <p className="border border-ink/20 px-4 py-6 text-center text-ink/60 text-sm">{t.unreachable}</p>
       ) : (
         <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b border-rule text-left text-[11px] uppercase tracking-wide text-ink/60">
-                  <th className="py-2 pr-2">#</th>
-                  <th className="py-2 pr-2">Asset</th>
-                  <th className="py-2 pr-2 text-right">Price</th>
-                  <th className="py-2 pr-2 text-right">24h</th>
-                  <th className="py-2 pr-2 text-right hidden sm:table-cell">Market Cap</th>
-                  <th className="py-2 text-right hidden sm:table-cell">Volume (24h)</th>
+                  <th className="py-2 pr-2">{t.colRank}</th>
+                  <th className="py-2 pr-2">{t.colAsset}</th>
+                  <th className="py-2 pr-2 text-right">{t.colPrice}</th>
+                  <th className="py-2 pr-2 text-right">{t.col24h}</th>
+                  <th className="py-2 pr-2 text-right hidden sm:table-cell">{t.colMarketCap}</th>
+                  <th className="py-2 text-right hidden sm:table-cell">{t.colVolume24h}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-rule">
@@ -48,7 +54,7 @@ export function TopPricesTable({
                     <td className="py-2 pr-2 text-ink/50">{a.rank ?? "—"}</td>
                     <td className="py-2 pr-2">
                       <a
-                        href={`/en/latest-crypto-news?coin=${a.symbol}`}
+                        href={`${newsHref}?coin=${a.symbol}`}
                         className="flex items-center gap-2 hover:underline decoration-accent decoration-2 underline-offset-2"
                       >
                         {a.image ? (
@@ -61,7 +67,7 @@ export function TopPricesTable({
                       </a>
                     </td>
                     <td className="py-2 pr-2 text-right font-serif">
-                      {a.usd !== null ? formatUsd(a.usd) : <span className="text-ink/50 text-xs">unavailable</span>}
+                      {a.usd !== null ? formatUsd(a.usd) : <span className="text-ink/50 text-xs">{dict.common.unavailable}</span>}
                     </td>
                     <td
                       className={`py-2 pr-2 text-right font-semibold ${
@@ -83,9 +89,7 @@ export function TopPricesTable({
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-[11px] text-ink/50">
-            Source: CoinGecko · refreshes every 10 minutes{asOf ? ` · data as of ${clockTime(asOf)}` : ""}
-          </p>
+          <p className="mt-2 text-[11px] text-ink/50">{t.sourceLine(asOf ? clockTime(asOf) : dict.common.dash)}</p>
         </>
       )}
     </section>

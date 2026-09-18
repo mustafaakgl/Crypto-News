@@ -1,27 +1,29 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import type { Briefing } from "@/lib/briefing";
 import { Modal } from "@/components/Modal";
 import { dateTime, relativeTime } from "@/lib/time";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 export function BriefingCard({ briefing }: { briefing: Briefing }) {
   const [open, setOpen] = useState(false);
+  const dict = getDictionary(localeFromPathname(usePathname()));
+  const t = dict.briefing;
 
   return (
-    <section aria-label="Latest 24h briefing" className="border border-ink">
+    <section aria-label={t.heading} className="border border-ink">
       <div className="px-3 py-3">
-        <h2 className="font-serif text-sm font-700 uppercase tracking-widest">Latest 24h Briefing</h2>
-        <p className="mt-1 text-xs text-ink/60">
-          {briefing.items.length} headline{briefing.items.length === 1 ? "" : "s"} from the last 24
-          hours, pulled from the current news cache.
-        </p>
+        <h2 className="font-serif text-sm font-700 uppercase tracking-widest">{t.heading}</h2>
+        <p className="mt-1 text-xs text-ink/60">{t.headlineCount(briefing.items.length)}</p>
         <button
           type="button"
           onClick={() => setOpen(true)}
           className="mt-2 border border-ink px-3 py-1.5 text-xs font-semibold uppercase tracking-wide hover:bg-ink hover:text-paper"
         >
-          View briefing
+          {t.viewBriefing}
         </button>
       </div>
 
@@ -30,27 +32,25 @@ export function BriefingCard({ briefing }: { briefing: Briefing }) {
           <div className="flex items-start justify-between gap-3 border-b border-rule px-5 py-4">
             <div>
               <h2 id="briefing-title" className="font-serif text-xl font-700">
-                Latest 24h Briefing
+                {t.heading}
               </h2>
               <p className="mt-1 text-[11px] text-ink/50">
-                Prepared {dateTime(briefing.preparedAt)} · covers {dateTime(briefing.windowFrom)} –{" "}
-                {dateTime(briefing.windowTo)} · generated on demand from the live news cache, not a
-                scheduled or delivered report.
+                {t.prepared(dateTime(briefing.preparedAt), dateTime(briefing.windowFrom), dateTime(briefing.windowTo))}
               </p>
             </div>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              aria-label="Close"
+              aria-label={dict.common.close}
               className="shrink-0 border border-ink/30 px-2 py-1 text-xs text-ink/60 hover:border-ink hover:text-ink"
             >
-              Close
+              {dict.common.close}
             </button>
           </div>
 
           <div className="px-5 py-4">
             {briefing.items.length === 0 ? (
-              <p className="text-sm text-ink/50 py-4">No headlines in the last 24 hours.</p>
+              <p className="text-sm text-ink/50 py-4">{t.empty}</p>
             ) : (
               <ol className="divide-y divide-rule">
                 {briefing.items.map((item, i) => (
@@ -67,7 +67,7 @@ export function BriefingCard({ briefing }: { briefing: Briefing }) {
                       rel="noopener noreferrer"
                       className="text-xs font-semibold underline decoration-accent decoration-2 underline-offset-2"
                     >
-                      Read original →
+                      {dict.common.readOriginalArrow}
                     </a>
                   </li>
                 ))}

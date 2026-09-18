@@ -5,17 +5,21 @@ import { TabSection } from "@/components/analytics/TabSection";
 import { Sparkline } from "@/components/analytics/Sparkline";
 import { utcDateTime } from "@/lib/time";
 import { formatFundingPct, formatPct, formatQuantity, formatMarketCap } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 function Field({
   label,
   value,
   time,
   badge,
+  unavailableLabel,
 }: {
   label: string;
   value: React.ReactNode;
   time: number | null;
   badge?: { text: string; color: "red" | "accent" } | null;
+  unavailableLabel: string;
 }) {
   return (
     <div className="border-b border-rule py-2 last:border-b-0">
@@ -34,7 +38,7 @@ function Field({
           )}
         </p>
       ) : (
-        <p className="text-sm text-ink/40">Unavailable</p>
+        <p className="text-sm text-ink/40">{unavailableLabel}</p>
       )}
       {time !== null && <p className="text-[11px] text-ink/40">{utcDateTime(time)}</p>}
     </div>
@@ -46,14 +50,19 @@ export function DerivativesTab({
   data,
   loading,
   error,
+  locale = "en",
 }: {
   asset: Asset;
   data: DerivativesResult | null;
   loading: boolean;
   error: string | null;
+  locale?: Locale;
 }) {
+  const dict = getDictionary(locale);
+  const t = dict.derivatives;
+
   if (loading && !data) {
-    return <div className="border border-ink/20 px-4 py-16 text-center text-ink/50 animate-pulse">Loading {asset}USDT perpetual futures data…</div>;
+    return <div className="border border-ink/20 px-4 py-16 text-center text-ink/50 animate-pulse">{t.loading(asset)}</div>;
   }
 
   if (error && !data) {
@@ -65,46 +74,39 @@ export function DerivativesTab({
   const now = Date.now();
   const oiStale = isRealtimeStale(data.oiQuantityTime, now);
   const oiHistStale = isHourlySeriesStale(data.oiHistory[data.oiHistory.length - 1]?.time ?? null, now);
-  const fundingBadge =
-    data.fundingFreshness === "awaiting_settlement"
-      ? ({ text: "Awaiting settlement data", color: "accent" } as const)
-      : null;
+  const fundingBadge = data.fundingFreshness === "awaiting_settlement" ? ({ text: t.awaitingSettlementData, color: "accent" } as const) : null;
 
   const meaningParts: React.ReactNode[] = [];
   if (data.lastFundingRatePct !== null) {
     const sign = data.lastFundingRatePct >= 0 ? "positive" : "negative";
     meaningParts.push(
       <span key="funding">
-        Last settled funding on {asset}USDT was {sign} ({formatFundingPct(data.lastFundingRatePct)}) at{" "}
-        {data.lastFundingTime ? utcDateTime(data.lastFundingTime) : "an unknown time"}.{" "}
+        {t.fundingSentence(`${asset}`, sign, formatFundingPct(data.lastFundingRatePct), data.lastFundingTime ? utcDateTime(data.lastFundingTime) : t.unknownTime)}
       </span>
     );
     if (data.fundingFreshness === "awaiting_settlement" && data.missingSettlementExpectedAt) {
       meaningParts.push(
         <span key="awaiting">
-          A settlement expected around {utcDateTime(data.missingSettlementExpectedAt)} hasn&rsquo;t appeared in the
-          feed yet
-          {data.expectedNextFundingTime && <> (next scheduled: {utcDateTime(data.expectedNextFundingTime)})</>}.{" "}
+          {t.awaitingSentence(
+            utcDateTime(data.missingSettlementExpectedAt),
+            data.expectedNextFundingTime ? t.nextFundingSuffix(utcDateTime(data.expectedNextFundingTime)) : ""
+          )}
         </span>
       );
     }
   } else {
-    meaningParts.push(<span key="funding-unavail">Realized funding rate is unavailable right now. </span>);
+    meaningParts.push(<span key="funding-unavail">{t.fundingRateUnavailable}</span>);
   }
   if (data.oiChangePct24h !== null) {
     const dir = data.oiChangePct24h >= 0 ? "increased" : "decreased";
-    meaningParts.push(
-      <span key="oi">
-        Open interest {dir} by {Math.abs(data.oiChangePct24h).toFixed(1)}% over the matched ~24h period.
-      </span>
-    );
+    meaningParts.push(<span key="oi">{t.oiChangeSentence(dir, Math.abs(data.oiChangePct24h).toFixed(1))}</span>);
   } else {
-    meaningParts.push(<span key="oi-unavail">24h open interest change is unavailable.</span>);
+    meaningParts.push(<span key="oi-unavail">{t.oiChangeUnavailable}</span>);
   }
 
   return (
     <TabSection
-      intro="Binance perpetual futures funding and open interest for the selected asset — a separate market from the spot candles above."
+      intro={t.intro}
       meaning={meaningParts}
       sourceLine={
         <>
@@ -114,75 +116,57 @@ export function DerivativesTab({
       }
       methodology={
         <>
-          <p>
-            Funding rate is the most recently settled value from funding-rate history (matched by fundingTime, not
-            array position), shown as a percentage — not the next funding rate. The funding interval is read from
-            Binance&rsquo;s own funding schedule for this symbol where available, or otherwise derived from the
-            spacing between realized records — never assumed to be a fixed 8h. &ldquo;Awaiting settlement
-            data&rdquo; appears once a settlement should already have happened (even if the provider&rsquo;s own
-            next-funding time has already rolled forward to the following period) and a short grace period has
-            passed without a new record.
-          </p>
-          <p className="mt-2">
-            Open interest change compares the latest hourly sample to the point closest to 24h earlier by timestamp
-            (not a fixed 24-sample offset); if no point falls within ~90 minutes of that target, the change is
-            Unavailable. Quantity (contracts) and notional (USD) are separate figures from separate endpoints with
-            their own timestamps. All figures cover Binance USDⓈ-M perpetual futures only, not the wider derivatives
-            market. A rising open interest alone is not treated as a directional (bullish/bearish) signal here.
-          </p>
+          <p>{t.methodology}</p>
           {data.fundingIntervalHours !== null && (
             <p className="mt-2">
-              Funding interval: {data.fundingIntervalHours}h (
-              {data.fundingIntervalSource === "provider" ? "from Binance's funding schedule" : "derived from realized records"}
-              ).
+              {t.fundingIntervalNote(data.fundingIntervalHours, data.fundingIntervalSource === "provider" ? t.fundingSourceProvider : t.fundingSourceDerived)}
             </p>
           )}
-          {data.markPrice !== null && <p>Mark price {data.markPrice.toFixed(2)} USDT.</p>}
+          {data.markPrice !== null && <p>{t.markPrice(data.markPrice.toFixed(2))}</p>}
         </>
       }
     >
       <div className="border border-ink">
         <div className="px-4 py-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-x-6">
           <Field
-            label="Last settled funding rate"
+            label={t.lastSettledFundingRate}
             value={data.lastFundingRatePct !== null ? formatFundingPct(data.lastFundingRatePct) : null}
             time={data.lastFundingTime}
             badge={fundingBadge}
+            unavailableLabel={dict.common.unavailableCapitalized}
           />
           <Field
-            label="Next funding time"
-            value={
-              data.nextFundingTime !== null
-                ? `${utcDateTime(data.nextFundingTime)}${data.nextFundingIsPast ? " (past — awaiting refresh)" : ""}`
-                : null
-            }
+            label={t.nextFundingTime}
+            value={data.nextFundingTime !== null ? `${utcDateTime(data.nextFundingTime)}${data.nextFundingIsPast ? t.pastAwaitingRefresh : ""}` : null}
             time={null}
+            unavailableLabel={dict.common.unavailableCapitalized}
           />
           <Field
-            label="Open interest"
+            label={t.openInterest}
             value={data.oiQuantity !== null ? formatQuantity(data.oiQuantity, asset) : null}
             time={data.oiQuantityTime}
-            badge={oiStale ? { text: "stale", color: "red" } : null}
+            badge={oiStale ? { text: t.stale, color: "red" } : null}
+            unavailableLabel={dict.common.unavailableCapitalized}
           />
           <Field
-            label="Open interest (notional)"
+            label={t.openInterestNotional}
             value={data.oiNotionalUsd !== null ? formatMarketCap(data.oiNotionalUsd) : null}
             time={data.oiNotionalTime}
-            badge={oiHistStale ? { text: "stale", color: "red" } : null}
+            badge={oiHistStale ? { text: t.stale, color: "red" } : null}
+            unavailableLabel={dict.common.unavailableCapitalized}
           />
           <Field
-            label="Open interest change — 24h"
+            label={t.openInterestChange24h}
             value={data.oiChangePct24h !== null ? formatPct(data.oiChangePct24h) : null}
             time={data.oiChangeLastTime}
-            badge={oiHistStale ? { text: "stale", color: "red" } : null}
+            badge={oiHistStale ? { text: t.stale, color: "red" } : null}
+            unavailableLabel={dict.common.unavailableCapitalized}
           />
         </div>
 
         <div className="px-4 py-3 border-t border-rule">
-          <p className="text-[11px] uppercase tracking-wide text-ink/50 mb-2">
-            Open interest · 72h history · 1h samples ({asset})
-          </p>
-          <Sparkline points={data.oiHistory} label="Open interest, 72h hourly" />
+          <p className="text-[11px] uppercase tracking-wide text-ink/50 mb-2">{t.openInterestHistorySection(asset)}</p>
+          <Sparkline points={data.oiHistory} label={t.openInterestSparklineLabel} locale={locale} />
         </div>
       </div>
     </TabSection>

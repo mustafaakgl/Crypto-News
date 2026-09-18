@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import type { NewsItem } from "@/lib/news";
 import { NewsListItem } from "@/components/NewsListItem";
 import { StoryCard } from "@/components/StoryCard";
@@ -12,6 +12,8 @@ import type { FomcGroupAssignment } from "@/lib/newsGrouping/types";
 import { KNOWN_ASSET_SYMBOLS } from "@/lib/assets";
 import { loadWatchlist, toggleWatchlist } from "@/lib/watchlist";
 import { mentionsFomcEvent } from "@/lib/newsAnalysis/fomcMatching";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 const PAGE_SIZE = 20;
 
@@ -20,11 +22,6 @@ type ViewKey = (typeof VIEW_KEYS)[number];
 function isViewKey(v: string | null): v is ViewKey {
   return !!v && (VIEW_KEYS as readonly string[]).includes(v);
 }
-const VIEW_DEFS: TabDef<ViewKey>[] = [
-  { key: "latest", label: "Latest" },
-  { key: "stories", label: "Stories" },
-  { key: "watchlist", label: "Watchlist" },
-];
 
 export function NewsExplorer({
   allItems,
@@ -36,7 +33,17 @@ export function NewsExplorer({
   fomcAssignments: Record<string, FomcGroupAssignment>;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const locale = localeFromPathname(pathname);
+  const dict = getDictionary(locale);
+  const t = dict.news;
+  const newsHref = `/${locale}/latest-crypto-news`;
+  const VIEW_DEFS: TabDef<ViewKey>[] = [
+    { key: "latest", label: t.viewLatest },
+    { key: "stories", label: t.viewStories },
+    { key: "watchlist", label: t.viewWatchlist },
+  ];
 
   const [view, setView] = useState<ViewKey>(isViewKey(searchParams.get("view")) ? (searchParams.get("view") as ViewKey) : "latest");
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
@@ -85,7 +92,7 @@ export function NewsExplorer({
     if (source !== "all") params.set("source", source);
     if (view !== "latest") params.set("view", view);
     const qs = params.toString();
-    router.replace(qs ? `/en/latest-crypto-news?${qs}` : "/en/latest-crypto-news", { scroll: false });
+    router.replace(qs ? `${newsHref}?${qs}` : newsHref, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, coin, source, view]);
 
@@ -124,42 +131,38 @@ export function NewsExplorer({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
-      <h1 className="font-serif text-3xl font-800 mb-1">Latest Crypto News</h1>
-      <p className="text-sm text-ink/60 mb-4">
-        {allItems.length} headlines from CoinDesk and Decrypt, newest first. No official
-        confirmation has been applied to any item.
-      </p>
+      <h1 className="font-serif text-3xl font-800 mb-1">{t.heading}</h1>
+      <p className="text-sm text-ink/60 mb-4">{t.subheading(allItems.length)}</p>
 
       {sourceErrors.length > 0 && (
         <p className="border border-ink/20 bg-accent/10 px-3 py-2 text-xs text-ink/80 mb-4">
-          Could not reach: {sourceErrors.map((e) => e.sourceName).join(", ")} — showing available
-          sources only.
+          {t.sourceErrorBanner(sourceErrors.map((e) => e.sourceName).join(", "))}
         </p>
       )}
 
       <div className="mb-4 border-b border-rule">
-        <Tabs tabs={VIEW_DEFS} active={view} onChange={setView} idPrefix="news-view" ariaLabel="News views" />
+        <Tabs tabs={VIEW_DEFS} active={view} onChange={setView} idPrefix="news-view" ariaLabel={t.ariaViews} />
       </div>
 
       <div className="flex flex-wrap gap-3 mb-6 border-y border-rule py-3">
         <label className="flex-1 min-w-[200px]">
-          <span className="sr-only">Search headlines and summaries</span>
+          <span className="sr-only">{t.ariaSearch}</span>
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search headlines and summaries"
+            placeholder={t.searchPlaceholder}
             className="w-full border border-ink/30 px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
           />
         </label>
         <label className="flex items-center gap-2 text-xs">
-          <span className="text-ink/60">Coin</span>
+          <span className="text-ink/60">{t.coin}</span>
           <select
             value={coin}
             onChange={(e) => setCoin(e.target.value)}
             className="border border-ink/30 px-2 py-1.5 text-sm focus:outline-none focus:border-ink"
           >
-            <option value="all">All</option>
+            <option value="all">{t.all}</option>
             {coinOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -168,13 +171,13 @@ export function NewsExplorer({
           </select>
         </label>
         <label className="flex items-center gap-2 text-xs">
-          <span className="text-ink/60">Source</span>
+          <span className="text-ink/60">{t.source}</span>
           <select
             value={source}
             onChange={(e) => setSource(e.target.value)}
             className="border border-ink/30 px-2 py-1.5 text-sm focus:outline-none focus:border-ink"
           >
-            <option value="all">All</option>
+            <option value="all">{t.all}</option>
             {sourceOptions.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -187,10 +190,10 @@ export function NewsExplorer({
       {view === "watchlist" && (
         <div className="mb-6 border border-ink/20 px-4 py-3 space-y-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-ink/60">Followed assets</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-ink/60">{t.followedAssets}</p>
             <label className="flex items-center gap-1.5 text-xs text-ink/60">
               <input type="checkbox" checked={includeMacro} onChange={(e) => setIncludeMacro(e.target.checked)} />
-              Include macro news (Fed/FOMC)
+              {t.includeMacroNews}
             </label>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -211,24 +214,22 @@ export function NewsExplorer({
               );
             })}
           </div>
-          <p className="text-[11px] text-ink/50">Matches are limited to the sources currently connected to this app: CoinDesk and Decrypt.</p>
+          <p className="text-[11px] text-ink/50">{t.watchlistScopeNote}</p>
         </div>
       )}
 
       {view === "watchlist" && watchlist.length === 0 && (
-        <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">Add assets to follow — tap a symbol above to get started.</p>
+        <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">{t.emptyAddAssets}</p>
       )}
 
       {view === "watchlist" && watchlist.length > 0 && watchlistItems.length === 0 && (
         <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">
-          No news for your followed assets right now{query || coin !== "all" || source !== "all" ? " within the current search/filters" : ""}.
+          {query || coin !== "all" || source !== "all" ? t.emptyNoFollowedNewsFiltered : t.emptyNoFollowedNews}
         </p>
       )}
 
       {view !== "watchlist" && filtered.length === 0 && (
-        <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">
-          No news matches your search and filters. Try clearing the coin or source filter.
-        </p>
+        <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">{t.emptyNoMatches}</p>
       )}
 
       {view === "stories" && stories.length > 0 && (
@@ -242,9 +243,7 @@ export function NewsExplorer({
               )
             )}
           </ul>
-          <p className="mt-4 text-xs text-ink/50">
-            Showing {shownCount} of {totalForView} stories.
-          </p>
+          <p className="mt-4 text-xs text-ink/50">{t.showingStories(shownCount, totalForView)}</p>
         </>
       )}
 
@@ -265,9 +264,7 @@ export function NewsExplorer({
       )}
 
       {view !== "stories" && (view === "latest" ? filtered.length > 0 : watchlistItems.length > 0) && (
-        <p className="mt-4 text-xs text-ink/50">
-          Showing {shownCount} of {totalForView} matching headlines.
-        </p>
+        <p className="mt-4 text-xs text-ink/50">{t.showingHeadlines(shownCount, totalForView)}</p>
       )}
 
       {hasMore && (
@@ -276,7 +273,7 @@ export function NewsExplorer({
           onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
           className="mt-3 border border-ink px-4 py-2 text-xs font-semibold uppercase tracking-wide hover:bg-ink hover:text-paper"
         >
-          Load more
+          {t.loadMore}
         </button>
       )}
     </div>

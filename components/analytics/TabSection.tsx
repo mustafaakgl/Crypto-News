@@ -1,6 +1,9 @@
 "use client";
 
 import { useId, useState } from "react";
+import { usePathname } from "next/navigation";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 // Shared readability structure for every Analytics tab:
 //   1. one-sentence "what does this section show" intro
@@ -23,6 +26,7 @@ export function TabSection({
 }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
+  const dict = getDictionary(localeFromPathname(usePathname()));
 
   return (
     <div className="space-y-4">
@@ -31,7 +35,7 @@ export function TabSection({
       {children}
 
       <div className="border border-rule bg-accent/5 px-4 py-3">
-        <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">What does this mean?</p>
+        <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">{dict.tabSection.whatDoesThisMean}</p>
         <div className="text-sm text-ink/80">{meaning}</div>
       </div>
 
@@ -45,7 +49,7 @@ export function TabSection({
           aria-controls={panelId}
           className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-ink/60 hover:text-ink"
         >
-          Methodology &amp; sources
+          {dict.tabSection.methodologyAndSources}
           <span aria-hidden="true">{open ? "−" : "+"}</span>
         </button>
         {open && (

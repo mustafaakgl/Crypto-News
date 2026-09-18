@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import type { MarketAsset } from "@/lib/prices";
 import { clockTime } from "@/lib/time";
 import { formatUsd, formatPct, formatMarketCap } from "@/lib/format";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 const PAGE_SIZE = 20;
 
@@ -14,7 +17,6 @@ export function PricesExplorer({
   assets,
   asOf,
   error,
-  scope,
 }: {
   assets: MarketAsset[];
   asOf: string | null;
@@ -25,6 +27,10 @@ export function PricesExplorer({
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(1);
+  const locale = localeFromPathname(usePathname());
+  const dict = getDictionary(locale);
+  const t = dict.prices;
+  const newsHref = `/${locale}/latest-crypto-news`;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -74,33 +80,24 @@ export function PricesExplorer({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
-      <h1 className="font-serif text-3xl font-800 mb-1">Crypto Prices</h1>
-      <p className="text-sm text-ink/60 mb-4">
-        {scope}. Source: CoinGecko, refreshes every 10 minutes
-        {asOf ? ` · data as of ${clockTime(asOf)}` : ""}.
-      </p>
+      <h1 className="font-serif text-3xl font-800 mb-1">{t.heading}</h1>
+      <p className="text-sm text-ink/60 mb-4">{t.subheading(t.scopeTop100, asOf ? clockTime(asOf) : dict.common.dash)}</p>
 
-      {error && (
-        <p className="border border-ink/20 bg-accent/10 px-3 py-2 text-xs text-ink/80 mb-4">
-          CoinGecko could not be reached — prices temporarily unavailable.
-        </p>
-      )}
+      {error && <p className="border border-ink/20 bg-accent/10 px-3 py-2 text-xs text-ink/80 mb-4">{t.unreachable}</p>}
 
       <label className="block mb-4">
-        <span className="sr-only">Search by name or symbol</span>
+        <span className="sr-only">{t.ariaSearch}</span>
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name or symbol"
+          placeholder={t.searchPlaceholder}
           className="w-full max-w-sm border border-ink/30 px-3 py-1.5 text-sm focus:outline-none focus:border-ink"
         />
       </label>
 
       {sorted.length === 0 ? (
-        <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">
-          {error ? "No price data available right now." : "No assets match your search."}
-        </p>
+        <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">{error ? t.emptyNoData : t.emptyNoMatches}</p>
       ) : (
         <>
           <div className="overflow-x-auto">
@@ -109,27 +106,32 @@ export function PricesExplorer({
                 <tr className="border-b-2 border-ink text-left text-[11px] uppercase tracking-wide text-ink/60">
                   <th className="py-2 pr-2">
                     <button type="button" onClick={() => toggleSort("rank")} className="hover:text-ink">
-                      #{sortIndicator("rank")}
+                      {t.colRank}
+                      {sortIndicator("rank")}
                     </button>
                   </th>
                   <th className="py-2 pr-2">
                     <button type="button" onClick={() => toggleSort("name")} className="hover:text-ink">
-                      Asset{sortIndicator("name")}
+                      {t.colAsset}
+                      {sortIndicator("name")}
                     </button>
                   </th>
                   <th className="py-2 pr-2 text-right">
                     <button type="button" onClick={() => toggleSort("usd")} className="hover:text-ink">
-                      Price{sortIndicator("usd")}
+                      {t.colPrice}
+                      {sortIndicator("usd")}
                     </button>
                   </th>
                   <th className="py-2 pr-2 text-right">
                     <button type="button" onClick={() => toggleSort("changePct24h")} className="hover:text-ink">
-                      24h{sortIndicator("changePct24h")}
+                      {t.col24h}
+                      {sortIndicator("changePct24h")}
                     </button>
                   </th>
                   <th className="py-2 text-right">
                     <button type="button" onClick={() => toggleSort("marketCapUsd")} className="hover:text-ink">
-                      Market Cap{sortIndicator("marketCapUsd")}
+                      {t.colMarketCap}
+                      {sortIndicator("marketCapUsd")}
                     </button>
                   </th>
                 </tr>
@@ -140,7 +142,7 @@ export function PricesExplorer({
                     <td className="py-2 pr-2 text-ink/50">{a.rank ?? "—"}</td>
                     <td className="py-2 pr-2">
                       <a
-                        href={`/en/latest-crypto-news?coin=${a.symbol}`}
+                        href={`${newsHref}?coin=${a.symbol}`}
                         className="font-semibold hover:underline decoration-accent decoration-2 underline-offset-2"
                       >
                         {a.name}
@@ -148,7 +150,7 @@ export function PricesExplorer({
                       <span className="ml-1 text-ink/50">{a.symbol}</span>
                     </td>
                     <td className="py-2 pr-2 text-right font-serif">
-                      {a.usd !== null ? formatUsd(a.usd) : <span className="text-ink/50 text-xs">unavailable</span>}
+                      {a.usd !== null ? formatUsd(a.usd) : <span className="text-ink/50 text-xs">{dict.common.unavailable}</span>}
                     </td>
                     <td
                       className={`py-2 pr-2 text-right ${
@@ -167,9 +169,7 @@ export function PricesExplorer({
           </div>
 
           <div className="mt-4 flex items-center justify-between text-xs text-ink/60">
-            <p>
-              Page {page} of {totalPages} · {sorted.length} assets
-            </p>
+            <p>{t.pageOf(page, totalPages, sorted.length)}</p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -177,7 +177,7 @@ export function PricesExplorer({
                 disabled={page <= 1}
                 className="border border-ink/30 px-3 py-1.5 font-semibold uppercase tracking-wide disabled:opacity-30 hover:border-ink disabled:hover:border-ink/30"
               >
-                Prev
+                {t.prev}
               </button>
               <button
                 type="button"
@@ -185,7 +185,7 @@ export function PricesExplorer({
                 disabled={page >= totalPages}
                 className="border border-ink/30 px-3 py-1.5 font-semibold uppercase tracking-wide disabled:opacity-30 hover:border-ink disabled:hover:border-ink/30"
               >
-                Next
+                {t.next}
               </button>
             </div>
           </div>

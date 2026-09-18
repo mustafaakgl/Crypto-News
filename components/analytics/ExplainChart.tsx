@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import type { Asset, Interval } from "@/lib/klines";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 type VerifiedReference = {
   chunkId: string;
@@ -44,6 +47,8 @@ export function ExplainChart({ asset, interval }: { asset: Asset; interval: Inte
   const [response, setResponse] = useState<ExplainResponse | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const dict = getDictionary(localeFromPathname(usePathname()));
+  const t = dict.explainChart;
 
   // Reset on selection change so a stale explanation never lingers under a
   // new coin/interval.
@@ -71,7 +76,7 @@ export function ExplainChart({ asset, interval }: { asset: Asset; interval: Inte
       setState("done");
     } catch (err) {
       if (thisRequestId !== requestIdRef.current) return;
-      setNetworkError(err instanceof Error ? err.message : "Request failed.");
+      setNetworkError(err instanceof Error ? err.message : t.failed(""));
       setState("failed");
     }
   }
@@ -79,49 +84,42 @@ export function ExplainChart({ asset, interval }: { asset: Asset; interval: Inte
   return (
     <section className="border border-ink">
       <div className="px-4 py-3 border-b border-rule flex items-center justify-between">
-        <h3 className="font-serif text-base font-700">Source-backed explanation</h3>
+        <h3 className="font-serif text-base font-700">{t.heading}</h3>
         <button
           type="button"
           onClick={handleExplain}
           disabled={state === "loading"}
           className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide border border-ink bg-ink text-paper hover:bg-ink/80 disabled:opacity-40"
         >
-          {state === "loading" ? "Explaining…" : "Explain this chart"}
+          {state === "loading" ? t.explaining : t.explainThisChart}
         </button>
       </div>
 
       <div className="px-4 py-3">
-        {state === "idle" && (
-          <p className="text-sm text-ink/50">
-            Generates a short explanation of the Price Action findings above, referencing a trading book as
-            background context.
-          </p>
-        )}
+        {state === "idle" && <p className="text-sm text-ink/50">{t.idle}</p>}
 
-        {state === "loading" && <p className="text-sm text-ink/50 animate-pulse">Retrieving sources and generating an explanation…</p>}
+        {state === "loading" && <p className="text-sm text-ink/50 animate-pulse">{t.retrieving}</p>}
 
-        {state === "failed" && (
-          <p className="text-sm text-ink/60">Could not reach the explanation service{networkError ? `: ${networkError}` : "."} The chart and calculations above are unaffected.</p>
-        )}
+        {state === "failed" && <p className="text-sm text-ink/60">{t.failed(networkError ?? "")}</p>}
 
         {state === "done" && response?.status === "ok" && (
           <div className="space-y-4">
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">What the chart shows</p>
+              <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">{t.whatTheChartShows}</p>
               <p className="text-sm text-ink/90">{response.observation}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">How this relates to the source</p>
+              <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">{t.howThisRelates}</p>
               <p className="text-sm text-ink/80">{response.interpretation}</p>
             </div>
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">Limitations</p>
+              <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold mb-1">{t.limitations}</p>
               <p className="text-sm text-ink/70">{response.limitations}</p>
             </div>
-            <ReferenceList references={response.references} title="References" />
+            <ReferenceList references={response.references} title={t.references} />
             <p className="text-[11px] text-ink/40">
-              {response.cached ? "Served from cache. " : ""}Excerpts are used as background context, not as a verified
-              trading strategy or a claim that the book endorses this reading.
+              {response.cached ? t.servedFromCache : ""}
+              {t.excerptDisclaimer}
             </p>
           </div>
         )}
@@ -133,7 +131,7 @@ export function ExplainChart({ asset, interval }: { asset: Asset; interval: Inte
         {state === "done" && response?.status === "llm_unavailable" && (
           <div className="space-y-3">
             <p className="text-sm text-ink/60">{response.message}</p>
-            {response.references.length > 0 && <ReferenceList references={response.references} title="Related source excerpts (retrieved, not yet explained)" />}
+            {response.references.length > 0 && <ReferenceList references={response.references} title={t.relatedExcerptsUnavailable} />}
           </div>
         )}
 

@@ -3,23 +3,31 @@
 import { useEffect, useState } from "react";
 import type { CexTickerBreakdown } from "@/lib/exchangeAnalytics/types";
 import { formatMarketCap } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/locale";
+import { getDictionary, type Dictionary } from "@/lib/i18n/getDictionary";
 
-const QUOTE_TYPE_LABEL: Record<string, string> = { fiat: "Fiat (USD/EUR/…)", stablecoin: "Stablecoin (USDT/USDC/…)", crypto: "Other crypto" };
-
-function BreakdownList({ entries, labelFor }: { entries: { key: string; volumeUsd: number }[]; labelFor: (key: string) => string }) {
+function BreakdownList({
+  entries,
+  labelFor,
+  t,
+}: {
+  entries: { key: string; volumeUsd: number }[];
+  labelFor: (key: string) => string;
+  t: Dictionary["exchangeDrilldown"];
+}) {
   const total = entries.reduce((s, e) => s + e.volumeUsd, 0);
   return (
     <table className="w-full text-xs border-collapse">
       <thead>
         <tr className="text-left text-[10px] uppercase tracking-wide text-ink/40 border-b border-rule/60">
           <th scope="col" className="py-1 pr-2 font-normal">
-            Group
+            {t.colGroup}
           </th>
           <th scope="col" className="py-1 pr-2 font-normal text-right">
-            Volume (USD)
+            {t.colVolumeUsd}
           </th>
           <th scope="col" className="py-1 font-normal text-right w-16">
-            Share of retrieved pairs
+            {t.colShareOfRetrieved}
           </th>
         </tr>
       </thead>
@@ -36,9 +44,19 @@ function BreakdownList({ entries, labelFor }: { entries: { key: string; volumeUs
   );
 }
 
-export function ExchangeDrilldown({ exchangeId, exchangeName }: { exchangeId: string; exchangeName: string }) {
+export function ExchangeDrilldown({
+  exchangeId,
+  exchangeName,
+  locale = "en",
+}: {
+  exchangeId: string;
+  exchangeName: string;
+  locale?: Locale;
+}) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [data, setData] = useState<(CexTickerBreakdown & { stale?: boolean }) | null>(null);
+  const t = getDictionary(locale).exchangeDrilldown;
+  const quoteTypeLabel: Record<string, string> = { fiat: t.quoteTypeFiat, stablecoin: t.quoteTypeStablecoin, crypto: t.quoteTypeCrypto };
 
   useEffect(() => {
     let cancelled = false;
@@ -65,34 +83,28 @@ export function ExchangeDrilldown({ exchangeId, exchangeName }: { exchangeId: st
 
   return (
     <div className="border border-ink/20 bg-accent/5 px-4 py-3 mt-2 space-y-3">
-      <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold">{exchangeName} — pair breakdown</p>
-      <p className="text-[10px] text-ink/50">
-        Current ticker snapshot (roughly the trailing 24h) — independent of whatever 7D/30D/1Y period is selected above, never presented
-        as that period&apos;s distribution.
-      </p>
+      <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold">{t.pairBreakdown(exchangeName)}</p>
+      <p className="text-[10px] text-ink/50">{t.scopeNote}</p>
 
-      {state === "loading" && <p className="text-xs text-ink/50 animate-pulse">Loading pair breakdown…</p>}
-      {state === "error" && <p className="text-xs text-ink/50">Could not load a pair breakdown for this exchange right now.</p>}
+      {state === "loading" && <p className="text-xs text-ink/50 animate-pulse">{t.loading}</p>}
+      {state === "error" && <p className="text-xs text-ink/50">{t.error}</p>}
 
       {state === "ready" && data && (
         <>
-          <p className="text-xs text-ink/70 font-semibold">
-            {data.pairsConsidered} pair{data.pairsConsidered === 1 ? "" : "s"} retrieved (page 1 only)
-            {data.pairsExcludedAnomalousOrStale > 0 && `, ${data.pairsExcludedAnomalousOrStale} excluded as anomalous/stale`}
-          </p>
+          <p className="text-xs text-ink/70 font-semibold">{t.pairsRetrieved(data.pairsConsidered, data.pairsExcludedAnomalousOrStale)}</p>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-ink/40 mb-1">By base asset</p>
-              <BreakdownList entries={data.byBaseAsset} labelFor={(k) => k} />
+              <p className="text-[10px] uppercase tracking-wide text-ink/40 mb-1">{t.byBaseAsset}</p>
+              <BreakdownList entries={data.byBaseAsset} labelFor={(k) => k} t={t} />
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wide text-ink/40 mb-1">By quote currency type</p>
-              <BreakdownList entries={data.byQuoteType} labelFor={(k) => QUOTE_TYPE_LABEL[k] ?? k} />
+              <p className="text-[10px] uppercase tracking-wide text-ink/40 mb-1">{t.byQuoteType}</p>
+              <BreakdownList entries={data.byQuoteType} labelFor={(k) => quoteTypeLabel[k] ?? k} t={t} />
             </div>
           </div>
           <p className="text-[10px] text-ink/40">
             {data.coverageNote}
-            {data.stale && <span className="text-accent"> Refreshing in the background…</span>}
+            {data.stale && <span className="text-accent"> {t.refreshingInBackground}</span>}
           </p>
         </>
       )}

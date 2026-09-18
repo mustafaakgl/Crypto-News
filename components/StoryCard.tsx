@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import type { Story } from "@/lib/newsGrouping/buildStories";
-import { STORY_CATEGORY_LABEL } from "@/lib/newsGrouping/types";
 import { relativeTime, clockTime } from "@/lib/time";
 import { useNewsInteraction } from "@/components/NewsInteractionContext";
 import { SaveButton } from "@/components/SaveButton";
 import { CoverageDialog } from "@/components/CoverageDialog";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 // Only ever rendered for a group with more than one member — a lone article
 // renders as a plain NewsListItem instead, so the fields here (article
@@ -15,6 +17,8 @@ import { CoverageDialog } from "@/components/CoverageDialog";
 export function StoryCard({ story }: { story: Story }) {
   const { openDetail } = useNewsInteraction();
   const [coverageOpen, setCoverageOpen] = useState(false);
+  const locale = localeFromPathname(usePathname());
+  const dict = getDictionary(locale);
 
   // The earliest member is the representative headline — a simple,
   // consistent "first to report this" rule applied to real articles, never
@@ -23,7 +27,7 @@ export function StoryCard({ story }: { story: Story }) {
   const latest = story.items[story.items.length - 1];
   const distinctPublishers = new Set(story.items.map((i) => i.sourceName)).size;
   const assets = Array.from(new Set(story.items.flatMap((i) => i.assets))).sort();
-  const categoryLabel = STORY_CATEGORY_LABEL[story.category];
+  const categoryLabel = dict.news.storyCategory[story.category];
 
   return (
     <li className="py-4 first:pt-0">
@@ -46,8 +50,13 @@ export function StoryCard({ story }: { story: Story }) {
             </div>
           )}
           <p className="mt-2 text-xs text-ink/60">
-            First {relativeTime(representative.publishedAt)} ({clockTime(representative.publishedAt)}) · latest {clockTime(latest.publishedAt)} ·{" "}
-            {story.items.length} article{story.items.length === 1 ? "" : "s"} · {distinctPublishers} publisher{distinctPublishers === 1 ? "" : "s"}
+            {dict.news.firstLatestArticles(
+              relativeTime(representative.publishedAt),
+              clockTime(representative.publishedAt),
+              clockTime(latest.publishedAt),
+              story.items.length,
+              distinctPublishers
+            )}
           </p>
         </button>
         <SaveButton item={representative} />
@@ -57,7 +66,7 @@ export function StoryCard({ story }: { story: Story }) {
         onClick={() => setCoverageOpen(true)}
         className="mt-2 text-xs font-semibold uppercase tracking-wide border border-ink/30 px-2 py-1 hover:border-ink"
       >
-        View coverage
+        {dict.news.viewCoverage}
       </button>
       <CoverageDialog open={coverageOpen} onClose={() => setCoverageOpen(false)} story={story} />
     </li>

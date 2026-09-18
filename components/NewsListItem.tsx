@@ -1,12 +1,15 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import type { NewsItem } from "@/lib/news";
 import { NewsMeta } from "@/components/NewsMeta";
 import { SaveButton } from "@/components/SaveButton";
 import { useNewsInteraction } from "@/components/NewsInteractionContext";
+import { localeFromPathname } from "@/lib/i18n/locale";
 
 export function NewsListItem({ item }: { item: NewsItem }) {
   const { openDetail } = useNewsInteraction();
+  const locale = localeFromPathname(usePathname());
 
   return (
     <li className="py-4 first:pt-0">
@@ -17,7 +20,7 @@ export function NewsListItem({ item }: { item: NewsItem }) {
           </h3>
           <p className="mt-1 text-sm text-ink/70 leading-snug line-clamp-2">{item.summary}</p>
           <div className="mt-2">
-            <NewsMeta sourceName={item.sourceName} publishedAt={item.publishedAt} assets={item.assets} />
+            <NewsMeta sourceName={item.sourceName} publishedAt={item.publishedAt} assets={item.assets} locale={locale} />
           </div>
         </button>
         <SaveButton item={item} />

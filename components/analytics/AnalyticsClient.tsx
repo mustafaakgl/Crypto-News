@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { ASSETS, INTERVALS, isAsset, isInterval, type Asset, type Interval, type Candle } from "@/lib/klines";
 import type { PriceActionResult } from "@/lib/priceAction";
 import type { VolumeResult } from "@/lib/volume";
@@ -13,8 +13,9 @@ import { PriceActionTab } from "@/components/analytics/PriceActionTab";
 import { VolumeTab } from "@/components/analytics/VolumeTab";
 import { DerivativesTab } from "@/components/analytics/DerivativesTab";
 import { OnChainTab } from "@/components/analytics/OnChainTab";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
-const INTERVAL_LABEL: Record<Interval, string> = { "1h": "1H", "4h": "4H", "1d": "1D" };
 const CLIENT_FETCH_TIMEOUT_MS = 12000;
 
 const TAB_KEYS = ["price-action", "volume", "derivatives", "on-chain"] as const;
@@ -22,12 +23,10 @@ type TabKey = (typeof TAB_KEYS)[number];
 function isTabKey(v: string | null): v is TabKey {
   return !!v && (TAB_KEYS as readonly string[]).includes(v);
 }
-const TAB_DEFS: TabDef<TabKey>[] = [
-  { key: "price-action", label: "Price Action" },
-  { key: "volume", label: "Volume" },
-  { key: "derivatives", label: "Derivatives" },
-  { key: "on-chain", label: "On-chain" },
-];
+
+// "1H"/"4H"/"1D" are the same abbreviation in both supported interface
+// languages — not threaded through the dictionary.
+const INTERVAL_LABEL: Record<Interval, string> = { "1h": "1H", "4h": "4H", "1d": "1D" };
 
 type ApiResponse = {
   asset: Asset;
@@ -46,7 +45,17 @@ type LoadState = "loading" | "ready" | "error";
 
 export function AnalyticsClient() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const locale = localeFromPathname(pathname);
+  const dict = getDictionary(locale);
+  const t = dict.analyticsHub;
+  const TAB_DEFS: TabDef<TabKey>[] = [
+    { key: "price-action", label: t.tabPriceAction },
+    { key: "volume", label: t.tabVolume },
+    { key: "derivatives", label: t.tabDerivatives },
+    { key: "on-chain", label: t.tabOnChain },
+  ];
 
   // The URL is the single source of truth for asset/tab/interval — this is
   // what makes browser back/forward "just work" with zero extra sync code:
@@ -61,7 +70,7 @@ export function AnalyticsClient() {
     params.set("asset", next.asset ?? asset);
     params.set("tab", next.tab ?? tab);
     params.set("interval", next.interval ?? interval);
-    router.push(`/en/analytics?${params.toString()}`, { scroll: false });
+    router.push(`/${locale}/analytics?${params.toString()}`, { scroll: false });
   }
 
   const [state, setState] = useState<LoadState>("loading");
@@ -103,13 +112,13 @@ export function AnalyticsClient() {
     fetch(`/api/klines?asset=${asset}&interval=${interval}`, { signal: controller.signal })
       .then(async (res) => {
         clearTimeout(timeoutId);
-        if (res.status === 429) throw new Error("Rate limited — please try again shortly.");
-        if (res.status === 503) throw new Error("Service temporarily unavailable (503).");
+        if (res.status === 429) throw new Error(t.errorRateLimited);
+        if (res.status === 503) throw new Error(t.errorServiceUnavailable);
         const json = (await res.json()) as ApiResponse;
         if (thisRequestId !== requestIdRef.current) return;
 
         if (json.error || json.candles.length === 0) {
-          setErrorMessage(json.error ?? "No data available.");
+          setErrorMessage(json.error ?? t.errorNoData);
           setData(json);
           setState("error");
           return;
@@ -122,12 +131,12 @@ export function AnalyticsClient() {
         if (thisRequestId !== requestIdRef.current) return;
         if (err instanceof DOMException && err.name === "AbortError") {
           if (!timedOut) return; // superseded by a newer selection — not an error
-          setErrorMessage("Request timed out. Please try again.");
+          setErrorMessage(t.errorTimedOut);
           setData(null);
           setState("error");
           return;
         }
-        setErrorMessage(err instanceof Error ? err.message : "Request failed.");
+        setErrorMessage(err instanceof Error ? err.message : t.errorRequestFailed);
         setData(null);
         setState("error");
       });
@@ -156,8 +165,8 @@ export function AnalyticsClient() {
     fetch(`/api/derivatives?asset=${asset}`, { signal: controller.signal })
       .then(async (res) => {
         clearTimeout(timeoutId);
-        if (res.status === 429) throw new Error("Rate limited — please try again shortly.");
-        if (res.status === 503) throw new Error("Service temporarily unavailable (503).");
+        if (res.status === 429) throw new Error(t.errorRateLimited);
+        if (res.status === 503) throw new Error(t.errorServiceUnavailable);
         const json = (await res.json()) as DerivativesResult | { error: string };
         if (thisRequestId !== derivRequestIdRef.current) return;
         if ("error" in json) {
@@ -173,12 +182,12 @@ export function AnalyticsClient() {
         if (thisRequestId !== derivRequestIdRef.current) return;
         if (err instanceof DOMException && err.name === "AbortError") {
           if (!timedOut) return;
-          setDerivativesError("Request timed out. Please try again.");
+          setDerivativesError(t.errorTimedOut);
           setDerivatives(null);
           setDerivativesLoading(false);
           return;
         }
-        setDerivativesError(err instanceof Error ? err.message : "Request failed.");
+        setDerivativesError(err instanceof Error ? err.message : t.errorRequestFailed);
         setDerivatives(null);
         setDerivativesLoading(false);
       });
@@ -208,8 +217,8 @@ export function AnalyticsClient() {
     fetch(`/api/onchain?asset=${asset}`, { signal: controller.signal })
       .then(async (res) => {
         clearTimeout(timeoutId);
-        if (res.status === 429) throw new Error("Rate limited — please try again shortly.");
-        if (res.status === 503) throw new Error("Service temporarily unavailable (503).");
+        if (res.status === 429) throw new Error(t.errorRateLimited);
+        if (res.status === 503) throw new Error(t.errorServiceUnavailable);
         const json = (await res.json()) as OnChainResult | { error: string };
         if (thisRequestId !== onchainRequestIdRef.current) return;
         if ("error" in json) {
@@ -225,12 +234,12 @@ export function AnalyticsClient() {
         if (thisRequestId !== onchainRequestIdRef.current) return;
         if (err instanceof DOMException && err.name === "AbortError") {
           if (!timedOut) return;
-          setOnchainError("Request timed out. Please try again.");
+          setOnchainError(t.errorTimedOut);
           setOnchain(null);
           setOnchainLoading(false);
           return;
         }
-        setOnchainError(err instanceof Error ? err.message : "Request failed.");
+        setOnchainError(err instanceof Error ? err.message : t.errorRequestFailed);
         setOnchain(null);
         setOnchainLoading(false);
       });
@@ -246,19 +255,19 @@ export function AnalyticsClient() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-        <h1 className="font-serif text-3xl font-800">Market Analytics</h1>
+        <h1 className="font-serif text-3xl font-800">{t.heading}</h1>
         <Link
-          href="/en/analytics/exchanges"
+          href={`/${locale}/analytics/exchanges`}
           className="text-xs font-semibold uppercase tracking-wide text-ink underline decoration-accent decoration-2 underline-offset-2 hover:decoration-ink"
         >
-          Exchange Analytics →
+          {t.exchangeAnalyticsLink}
         </Link>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 border-y border-rule py-3 mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-ink/60 uppercase tracking-wide">Asset</span>
-          <div className="flex gap-1" role="group" aria-label="Select asset">
+          <span className="text-xs text-ink/60 uppercase tracking-wide">{t.asset}</span>
+          <div className="flex gap-1" role="group" aria-label={t.ariaSelectAsset}>
             {ASSETS.map((a) => (
               <button
                 key={a}
@@ -277,8 +286,8 @@ export function AnalyticsClient() {
 
         {showIntervalControl && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-ink/60 uppercase tracking-wide">Interval</span>
-            <div className="flex gap-1" role="group" aria-label="Select time interval">
+            <span className="text-xs text-ink/60 uppercase tracking-wide">{t.interval}</span>
+            <div className="flex gap-1" role="group" aria-label={t.ariaSelectInterval}>
               {INTERVALS.map((i) => (
                 <button
                   key={i}
@@ -298,7 +307,7 @@ export function AnalyticsClient() {
       </div>
 
       <div className="border-b border-rule mb-6">
-        <Tabs tabs={TAB_DEFS} active={tab} onChange={(next) => navigate({ tab: next })} idPrefix="analytics" />
+        <Tabs tabs={TAB_DEFS} active={tab} onChange={(next) => navigate({ tab: next })} idPrefix="analytics" ariaLabel={t.ariaAnalyticsSections} />
       </div>
 
       {TAB_DEFS.map((def) => {
@@ -308,11 +317,11 @@ export function AnalyticsClient() {
             {def.key === "price-action" &&
               (state === "loading" && !data ? (
                 <div className="border border-ink/20 px-4 py-16 text-center text-ink/50 animate-pulse">
-                  Loading {asset}/USDT {INTERVAL_LABEL[interval]} candles…
+                  {t.loadingCandles(asset, INTERVAL_LABEL[interval])}
                 </div>
               ) : state === "error" && !data ? (
                 <div className="border border-ink/20 bg-accent/10 px-4 py-6 text-center text-ink/70">
-                  {errorMessage ?? "Could not load market data."}
+                  {errorMessage ?? t.couldNotLoad}
                 </div>
               ) : data && data.candles.length > 0 && data.priceAction && data.lastClosedAt ? (
                 <PriceActionTab
@@ -330,11 +339,11 @@ export function AnalyticsClient() {
             {def.key === "volume" &&
               (state === "loading" && !data ? (
                 <div className="border border-ink/20 px-4 py-16 text-center text-ink/50 animate-pulse">
-                  Loading {asset}/USDT {INTERVAL_LABEL[interval]} candles…
+                  {t.loadingCandles(asset, INTERVAL_LABEL[interval])}
                 </div>
               ) : state === "error" && !data ? (
                 <div className="border border-ink/20 bg-accent/10 px-4 py-6 text-center text-ink/70">
-                  {errorMessage ?? "Could not load market data."}
+                  {errorMessage ?? t.couldNotLoad}
                 </div>
               ) : data && data.candles.length > 0 && data.volume && data.lastClosedAt ? (
                 <VolumeTab
@@ -346,15 +355,16 @@ export function AnalyticsClient() {
                   pair={data.pair}
                   source="Binance klines"
                   stale={data.stale}
+                  locale={locale}
                 />
               ) : null)}
 
             {def.key === "derivatives" && (
-              <DerivativesTab asset={asset} data={derivatives} loading={derivativesLoading} error={derivativesError} />
+              <DerivativesTab asset={asset} data={derivatives} loading={derivativesLoading} error={derivativesError} locale={locale} />
             )}
 
             {def.key === "on-chain" && (
-              <OnChainTab asset={asset} data={onchain} loading={onchainLoading} error={onchainError} />
+              <OnChainTab asset={asset} data={onchain} loading={onchainLoading} error={onchainError} locale={locale} />
             )}
           </div>
         );

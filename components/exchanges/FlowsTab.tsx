@@ -2,19 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ExchangePeriod, VenueCount } from "@/lib/exchangeAnalytics/types";
-import { EXCHANGE_PERIOD_LABEL } from "@/lib/exchangeAnalytics/types";
 import { FLOW_ASSETS, FLOW_NETWORKS_BY_ASSET } from "@/lib/exchangeFlows/types";
 import type { ExchangeFlowsResult, ExchangeFlowDailySeries, FlowAsset, FlowNetwork } from "@/lib/exchangeFlows/types";
 import { describeNetflowDirection } from "@/lib/exchangeFlows/flowsMath";
 import { formatQuantity } from "@/lib/format";
 import { dateTime } from "@/lib/time";
+import type { Locale } from "@/lib/i18n/locale";
+import { getDictionary, type Dictionary } from "@/lib/i18n/getDictionary";
 
-const NETWORK_LABEL: Record<Exclude<FlowNetwork, null>, string> = {
-  bitcoin: "Bitcoin",
-  ethereum: "Ethereum",
-  tron: "Tron",
-  solana: "Solana",
-};
+function netflowDirectionLabel(value: number, t: Dictionary["flows"]): string {
+  const raw = describeNetflowDirection(value);
+  if (raw === "More crypto entered than left") return t.moreEnteredThanLeft;
+  if (raw === "More crypto left than entered") return t.moreLeftThanEntered;
+  return t.inflowOutflowEqual;
+}
 
 function useFlowsOverview(asset: FlowAsset, network: FlowNetwork, period: ExchangePeriod, count: VenueCount) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -81,6 +82,7 @@ export function FlowsTab({
   network,
   onAssetChange,
   onNetworkChange,
+  locale = "en",
 }: {
   period: ExchangePeriod;
   count: VenueCount;
@@ -88,8 +90,12 @@ export function FlowsTab({
   network: FlowNetwork;
   onAssetChange: (asset: FlowAsset) => void;
   onNetworkChange: (network: FlowNetwork) => void;
+  locale?: Locale;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const dict = getDictionary(locale);
+  const t = dict.flows;
+  const periodLabel = dict.exchangeAnalytics.periodLabels[period];
 
   const availableNetworks = FLOW_NETWORKS_BY_ASSET[asset];
 
@@ -104,8 +110,8 @@ export function FlowsTab({
     <div className="space-y-6">
       <div className="flex flex-wrap items-center gap-4 border-b border-rule pb-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-ink/60 uppercase tracking-wide">Asset</span>
-          <div className="flex gap-1" role="group" aria-label="Select asset">
+          <span className="text-xs text-ink/60 uppercase tracking-wide">{t.asset}</span>
+          <div className="flex gap-1" role="group" aria-label={t.ariaSelectAsset}>
             {FLOW_ASSETS.map((a) => (
               <button
                 key={a}
@@ -123,8 +129,8 @@ export function FlowsTab({
         </div>
         {availableNetworks.length > 1 && (
           <div className="flex items-center gap-2">
-            <span className="text-xs text-ink/60 uppercase tracking-wide">Network</span>
-            <div className="flex gap-1" role="group" aria-label="Select network">
+            <span className="text-xs text-ink/60 uppercase tracking-wide">{t.network}</span>
+            <div className="flex gap-1" role="group" aria-label={t.ariaSelectNetwork}>
               {availableNetworks.map((n) => (
                 <button
                   key={n ?? "none"}
@@ -135,7 +141,7 @@ export function FlowsTab({
                     network === n ? "bg-ink text-paper border-ink" : "border-ink/30 text-ink/60 hover:border-ink"
                   }`}
                 >
-                  {n ? NETWORK_LABEL[n] : "—"}
+                  {n ? t.networkLabels[n] : "—"}
                 </button>
               ))}
             </div>
@@ -143,13 +149,13 @@ export function FlowsTab({
         )}
       </div>
 
-      {state === "loading" && <p className="text-sm text-ink/50 animate-pulse py-8">Loading…</p>}
+      {state === "loading" && <p className="text-sm text-ink/50 animate-pulse py-8">{t.loading}</p>}
 
-      {state === "error" && <p className="text-sm text-ink/60 py-8">Could not load exchange flow data right now.</p>}
+      {state === "error" && <p className="text-sm text-ink/60 py-8">{t.error}</p>}
 
       {state === "ready" && data && data.status === "not_configured" && (
         <div className="border border-ink/20 px-4 py-6 text-center">
-          <p className="text-sm text-ink/60">Exchange flow data is not available yet.</p>
+          <p className="text-sm text-ink/60">{t.notAvailableYet}</p>
         </div>
       )}
 
@@ -157,37 +163,40 @@ export function FlowsTab({
         <>
           {data.supportedCount < data.requestedCount && (
             <p className="border border-ink/20 bg-accent/10 px-3 py-2 text-xs text-ink/80">
-              Data available for {data.supportedCount} of {data.requestedCount} selected exchanges.
+              {t.dataAvailableForN(data.supportedCount, data.requestedCount)}
             </p>
           )}
           <p className="text-xs text-ink/50">
-            Source: {data.source} · Window: {dateTime(data.periodStart)} – {dateTime(data.periodEnd)} (Europe/Berlin) · Unit: {asset}
-            {network ? ` on ${NETWORK_LABEL[network]}` : ""}
+            {t.sourceLine(
+              data.source,
+              dateTime(data.periodStart),
+              dateTime(data.periodEnd),
+              asset,
+              network ? t.onNetworkSuffix(t.networkLabels[network]) : ""
+            )}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
-              <caption className="sr-only">
-                Exchange {asset} flows for {EXCHANGE_PERIOD_LABEL[period]}
-              </caption>
+              <caption className="sr-only">{t.tableCaption(asset, periodLabel)}</caption>
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-ink/50 border-b border-rule">
                   <th scope="col" className="py-2 pr-2">
-                    Exchange
+                    {t.colExchange}
                   </th>
                   <th scope="col" className="py-2 pr-2 text-right">
-                    Inflow
+                    {t.colInflow}
                   </th>
                   <th scope="col" className="py-2 pr-2 text-right">
-                    Outflow
+                    {t.colOutflow}
                   </th>
                   <th scope="col" className="py-2 pr-2 text-right">
-                    Netflow
+                    {t.colNetflow}
                   </th>
                   <th scope="col" className="py-2 pr-2">
-                    Coverage
+                    {t.colCoverage}
                   </th>
                   <th scope="col" className="py-2">
-                    Updated
+                    {t.colUpdated}
                   </th>
                 </tr>
               </thead>
@@ -202,7 +211,7 @@ export function FlowsTab({
                     <td className="py-2 pr-2 text-right tabular-nums">{row.inflow !== null ? formatQuantity(row.inflow, asset) : "—"}</td>
                     <td className="py-2 pr-2 text-right tabular-nums">{row.outflow !== null ? formatQuantity(row.outflow, asset) : "—"}</td>
                     <td className="py-2 pr-2 text-right tabular-nums">{row.netflow !== null ? formatQuantity(row.netflow, asset) : "—"}</td>
-                    <td className="py-2 pr-2 text-ink/60">{row.coverage === "available" ? "Available" : "Unavailable"}</td>
+                    <td className="py-2 pr-2 text-ink/60">{row.coverage === "available" ? t.available : t.unavailable}</td>
                     <td className="py-2 text-ink/50">{row.updatedAt ? dateTime(row.updatedAt) : "—"}</td>
                   </tr>
                 ))}
@@ -212,24 +221,24 @@ export function FlowsTab({
 
           {expandedId && (
             <div className="border border-ink/20 bg-accent/5 px-4 py-3 mt-2 space-y-2">
-              {daily.state === "loading" && <p className="text-xs text-ink/50 animate-pulse">Loading daily flows…</p>}
-              {daily.state === "error" && <p className="text-xs text-ink/50">Could not load a daily breakdown for this exchange right now.</p>}
-              {daily.state === "ready" && daily.series === null && <p className="text-xs text-ink/50">No daily breakdown available for this exchange.</p>}
+              {daily.state === "loading" && <p className="text-xs text-ink/50 animate-pulse">{t.dailyLoading}</p>}
+              {daily.state === "error" && <p className="text-xs text-ink/50">{t.dailyError}</p>}
+              {daily.state === "ready" && daily.series === null && <p className="text-xs text-ink/50">{t.dailyEmpty}</p>}
               {daily.state === "ready" && daily.series && (
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="text-left text-[10px] uppercase tracking-wide text-ink/40 border-b border-rule/60">
                       <th scope="col" className="py-1 pr-2 font-normal">
-                        Date (UTC)
+                        {t.colDateUtc}
                       </th>
                       <th scope="col" className="py-1 pr-2 font-normal text-right">
-                        Inflow
+                        {t.colInflow}
                       </th>
                       <th scope="col" className="py-1 pr-2 font-normal text-right">
-                        Outflow
+                        {t.colOutflow}
                       </th>
                       <th scope="col" className="py-1 font-normal text-right">
-                        Netflow
+                        {t.colNetflow}
                       </th>
                     </tr>
                   </thead>
@@ -249,22 +258,16 @@ export function FlowsTab({
           )}
 
           <p className="text-xs text-ink/60">
-            {sumNetflow(data.rows) !== null && describeNetflowDirection(sumNetflow(data.rows)!)} across the {data.supportedCount} exchange
-            {data.supportedCount === 1 ? "" : "s"} with data — this describes reported wallet movement, not a trading signal, confidence
-            score, or price forecast.
+            {sumNetflow(data.rows) !== null &&
+              t.summarySentence(netflowDirectionLabel(sumNetflow(data.rows)!, t), data.supportedCount)}
           </p>
 
           <details className="border border-ink/20 px-4 py-3">
-            <summary className="cursor-pointer text-[11px] uppercase tracking-wide text-ink/50 font-semibold">How to read this</summary>
+            <summary className="cursor-pointer text-[11px] uppercase tracking-wide text-ink/50 font-semibold">{t.howToReadThis}</summary>
             <div className="mt-2 space-y-2 text-xs text-ink/60">
               <p>{data.methodologyNote}</p>
               <p>{data.networkScopeNote}</p>
-              <p>
-                Netflow = Inflow − Outflow, computed only when the source reports both for the exact same asset, network, period and
-                methodology. A transfer between the SAME exchange&apos;s own wallets is not new money entering or leaving the market —
-                see the source&apos;s own methodology for how it filters those out. This total is never combined across exchanges into a
-                single &quot;new money entering crypto&quot; figure.
-              </p>
+              <p>{t.netflowExplanation}</p>
             </div>
           </details>
         </>

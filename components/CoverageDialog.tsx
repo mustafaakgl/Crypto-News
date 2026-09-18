@@ -1,29 +1,33 @@
 "use client";
 
 import { useId } from "react";
+import { usePathname } from "next/navigation";
 import { Modal } from "@/components/Modal";
 import { useNewsInteraction } from "@/components/NewsInteractionContext";
 import type { Story } from "@/lib/newsGrouping/buildStories";
 import { relativeTime, clockTime } from "@/lib/time";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 export function CoverageDialog({ open, onClose, story }: { open: boolean; onClose: () => void; story: Story }) {
   const { openDetail } = useNewsInteraction();
   const titleId = useId();
+  const dict = getDictionary(localeFromPathname(usePathname()));
 
   return (
     <Modal open={open} onClose={onClose} titleId={titleId}>
       <div className="flex flex-col">
         <div className="flex items-start justify-between gap-3 border-b border-rule px-5 py-4">
           <h2 id={titleId} className="font-serif text-lg font-700 leading-snug">
-            Coverage · {story.items.length} article{story.items.length === 1 ? "" : "s"}
+            {dict.news.coverageCount(story.items.length)}
           </h2>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={dict.common.close}
             className="shrink-0 border border-ink/30 px-2 py-1 text-xs text-ink/60 hover:border-ink hover:text-ink"
           >
-            Close
+            {dict.common.close}
           </button>
         </div>
         <ul className="divide-y divide-rule px-5">

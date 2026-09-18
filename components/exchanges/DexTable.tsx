@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { DexProtocol } from "@/lib/exchangeAnalytics/types";
 import { formatMarketCap, formatPct } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 type SortKey = "name" | "volumeUsd" | "change";
 
@@ -25,9 +27,10 @@ function SortButton({ label, active, dir, onClick }: { label: string; active: bo
   );
 }
 
-export function DexTable({ protocols }: { protocols: DexProtocol[] }) {
+export function DexTable({ protocols, locale = "en" }: { protocols: DexProtocol[]; locale?: Locale }) {
   const [sortKey, setSortKey] = useState<SortKey>("volumeUsd");
   const [dir, setDir] = useState<1 | -1>(-1);
+  const t = getDictionary(locale).exchangeVolume;
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -41,28 +44,28 @@ export function DexTable({ protocols }: { protocols: DexProtocol[] }) {
   const sorted = sortProtocols(protocols, sortKey, dir);
 
   if (protocols.length === 0) {
-    return <p className="text-sm text-ink/50 py-4">No DEX protocols available for this selection.</p>;
+    return <p className="text-sm text-ink/50 py-4">{t.noProtocolsAvailable}</p>;
   }
 
   return (
     <table className="w-full text-sm border-collapse">
-      <caption className="sr-only">DEX spot volume ranking by protocol, sortable by column</caption>
+      <caption className="sr-only">{t.dexTableCaption}</caption>
       <thead>
         <tr className="text-left text-[11px] uppercase tracking-wide text-ink/50 border-b border-rule">
           <th scope="col" className="py-2 pr-2">
-            #
+            {t.colRank}
           </th>
           <th scope="col" className="py-2 pr-2">
-            <SortButton label="Protocol" active={sortKey === "name"} dir={dir} onClick={() => handleSort("name")} />
+            <SortButton label={t.colProtocol} active={sortKey === "name"} dir={dir} onClick={() => handleSort("name")} />
           </th>
           <th scope="col" className="py-2 pr-2">
-            Chains
+            {t.colChains}
           </th>
           <th scope="col" className="py-2 pr-2 text-right">
-            <SortButton label="Volume (USD)" active={sortKey === "volumeUsd"} dir={dir} onClick={() => handleSort("volumeUsd")} />
+            <SortButton label={t.colVolumeUsd} active={sortKey === "volumeUsd"} dir={dir} onClick={() => handleSort("volumeUsd")} />
           </th>
           <th scope="col" className="py-2 text-right">
-            <SortButton label="24h Δ" active={sortKey === "change"} dir={dir} onClick={() => handleSort("change")} />
+            <SortButton label={t.col24hDelta} active={sortKey === "change"} dir={dir} onClick={() => handleSort("change")} />
           </th>
         </tr>
       </thead>

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { Locale } from "@/lib/i18n/locale";
+import { getDictionary } from "@/lib/i18n/getDictionary";
 
 const SYMBOLS: Array<[string, string]> = [
   ["Apple", "NASDAQ:AAPL|1D"],
@@ -12,9 +14,10 @@ const SYMBOLS: Array<[string, string]> = [
 
 // Official TradingView "Symbol Overview" embed. Loaded client-side so a
 // failure to reach s3.tradingview.com never breaks the rest of the page.
-export function StocksWidget() {
+export function StocksWidget({ locale = "en" }: { locale?: Locale }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "loaded" | "failed">("loading");
+  const dict = getDictionary(locale);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -33,7 +36,7 @@ export function StocksWidget() {
       chartOnly: false,
       width: "100%",
       height: "100%",
-      locale: "en",
+      locale,
       colorTheme: "light",
       autosize: true,
       showVolume: false,
@@ -73,16 +76,11 @@ export function StocksWidget() {
       window.clearTimeout(failTimer);
       container.innerHTML = "";
     };
-  }, []);
+  }, [locale]);
 
   return (
     <div className="border border-ink">
-      {status === "failed" && (
-        <p className="px-3 py-2 text-xs text-ink/60 border-b border-rule">
-          Stocks widget could not load. It loads live from TradingView (s3.tradingview.com) — check
-          your connection or try reloading.
-        </p>
-      )}
+      {status === "failed" && <p className="px-3 py-2 text-xs text-ink/60 border-b border-rule">{dict.stocksWidget.errorNote}</p>}
       <div
         className="tradingview-widget-container"
         style={{ height: 340, opacity: status === "failed" ? 0.3 : 1 }}
@@ -96,9 +94,9 @@ export function StocksWidget() {
           rel="noopener nofollow"
           className="hover:text-ink hover:underline"
         >
-          Quotes by TradingView
+          {dict.stocksWidget.attribution}
         </a>
-        {status === "loading" && <span> · loading…</span>}
+        {status === "loading" && <span>{dict.stocksWidget.loadingSuffix}</span>}
       </div>
     </div>
   );

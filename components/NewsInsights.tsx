@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import type { NewsItem } from "@/lib/news";
 import type { NewsAnalysisResult, PublicSourceRecord } from "@/lib/newsAnalysis/types";
 import { classifyContentScope } from "@/lib/newsAnalysis/contentScope";
 import { selectExcerptHighlights } from "@/lib/newsAnalysis/excerptHighlights";
 import { relativeTime, clockTime } from "@/lib/time";
+import { localeFromPathname } from "@/lib/i18n/locale";
+import { getDictionary, type Dictionary } from "@/lib/i18n/getDictionary";
 
 const RETRYABLE_STATUSES = new Set(["llm_error", "rate_limited", "error"]);
 
@@ -37,6 +40,9 @@ function AiTag({ children }: { children: React.ReactNode }) {
 }
 
 export function NewsInsights({ item }: { item: NewsItem }) {
+  const dict: Dictionary = getDictionary(localeFromPathname(usePathname()));
+  const t = dict.newsInsights;
+
   // Instant, no-fetch baseline: the publisher's own excerpt, presented
   // without any LLM. Computed synchronously from data already on hand, so
   // the article is readable the moment the panel opens — nothing here waits
@@ -97,14 +103,14 @@ export function NewsInsights({ item }: { item: NewsItem }) {
   if (contentScope === "headline_only") {
     return (
       <div className="space-y-3">
-        <p className="text-sm text-ink/70">Only the headline is available. Read the original for details.</p>
+        <p className="text-sm text-ink/70">{t.headlineOnly}</p>
         <a
           href={item.url}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block text-sm font-semibold text-ink underline decoration-accent decoration-2 underline-offset-2 hover:decoration-ink"
         >
-          Read original →
+          {dict.common.readOriginalArrow}
         </a>
       </div>
     );
@@ -117,23 +123,24 @@ export function NewsInsights({ item }: { item: NewsItem }) {
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
               <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold">
-                Key points{result.limitedSourceDetail ? " · Limited source detail" : ""}
+                {t.keyPoints}
+                {result.limitedSourceDetail ? t.limitedSourceDetailSuffix : ""}
               </p>
-              <AiTag>AI-generated summary</AiTag>
+              <AiTag>{t.aiGeneratedSummary}</AiTag>
             </div>
             {result.keyTakeaways.length > 0 ? (
               <ul className="list-disc pl-4 space-y-1 text-sm text-ink/85">
-                {result.keyTakeaways.map((t, i) => (
-                  <li key={i}>{t.text}</li>
+                {result.keyTakeaways.map((t2, i) => (
+                  <li key={i}>{t2.text}</li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-ink/50">No distinct takeaways could be drawn from the available source text.</p>
+              <p className="text-sm text-ink/50">{t.noDistinctTakeaways}</p>
             )}
           </div>
 
           {result.whyItMatters.trim() && (
-            <SectionBlock label="Why it matters">
+            <SectionBlock label={t.whyItMatters}>
               <p className="text-sm text-ink/80">{result.whyItMatters}</p>
             </SectionBlock>
           )}
@@ -141,18 +148,18 @@ export function NewsInsights({ item }: { item: NewsItem }) {
           {result.analystTake.trim() && (
             <div className="border border-rule bg-accent/5 px-4 py-3">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold">Analyst take</p>
-                <AiTag>AI-generated analysis</AiTag>
+                <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold">{t.analystTake}</p>
+                <AiTag>{t.aiGeneratedAnalysis}</AiTag>
               </div>
               <p className="text-sm text-ink/80">{result.analystTake}</p>
             </div>
           )}
 
           {result.watchNext.length > 0 && (
-            <SectionBlock label="What to watch next">
+            <SectionBlock label={t.whatToWatchNext}>
               <ul className="list-disc pl-4 space-y-1 text-sm text-ink/85">
-                {result.watchNext.map((t, i) => (
-                  <li key={i}>{t.text}</li>
+                {result.watchNext.map((t2, i) => (
+                  <li key={i}>{t2.text}</li>
                 ))}
               </ul>
             </SectionBlock>
@@ -161,8 +168,8 @@ export function NewsInsights({ item }: { item: NewsItem }) {
       ) : excerpt.mode === "key_points" ? (
         <div>
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold">Key points</p>
-            <AiTag>Selected from publisher excerpt</AiTag>
+            <p className="text-[11px] uppercase tracking-wide text-ink/50 font-semibold">{t.keyPoints}</p>
+            <AiTag>{t.selectedFromExcerpt}</AiTag>
           </div>
           <ul className="list-disc pl-4 space-y-1 text-sm text-ink/85">
             {excerpt.sentences.map((s, i) => (
@@ -171,20 +178,20 @@ export function NewsInsights({ item }: { item: NewsItem }) {
           </ul>
         </div>
       ) : excerpt.mode === "paragraph" ? (
-        <SectionBlock label="Publisher excerpt">
+        <SectionBlock label={t.publisherExcerpt}>
           <p className="text-sm text-ink/85">{excerpt.text}</p>
         </SectionBlock>
       ) : null}
 
       {showAdditionalUnavailableNote && (
         <div className="flex items-center gap-2 text-xs text-ink/50">
-          <span>Additional analysis is temporarily unavailable.</span>
+          <span>{t.additionalAnalysisUnavailable}</span>
           <button
             type="button"
             onClick={() => runAnalysis(item)}
             className="px-2 py-0.5 font-semibold uppercase tracking-wide border border-ink/30 text-ink/60 hover:border-ink shrink-0"
           >
-            Retry
+            {dict.common.retry}
           </button>
         </div>
       )}
@@ -192,15 +199,14 @@ export function NewsInsights({ item }: { item: NewsItem }) {
       {/* Sources & updates — a compact disclosure, always built from real
           article data, independent of AI status. */}
       <details className="border border-ink/20 px-4 py-3">
-        <summary className="cursor-pointer text-[11px] uppercase tracking-wide text-ink/50 font-semibold">Sources &amp; updates</summary>
+        <summary className="cursor-pointer text-[11px] uppercase tracking-wide text-ink/50 font-semibold">{t.sourcesAndUpdates}</summary>
         <div className="mt-2 space-y-3 text-xs text-ink/60">
           <p>
-            Published: {relativeTime(item.publishedAt)} · {clockTime(item.publishedAt)} (Europe/Berlin)
+            {t.published(relativeTime(item.publishedAt), clockTime(item.publishedAt))}
             {generatedAt && (
               <>
-                {" · AI analysis prepared "}
-                {clockTime(generatedAt)}
-                {cached ? " (cached)" : ""}
+                {t.aiAnalysisPrepared(clockTime(generatedAt))}
+                {cached ? t.cachedSuffix : ""}
               </>
             )}
           </p>
@@ -209,9 +215,9 @@ export function NewsInsights({ item }: { item: NewsItem }) {
             <div key={r.id} className="border-l-2 border-ink/20 pl-2">
               <p className="font-semibold text-ink/70">{r.label}</p>
               <p className="text-[10px] text-ink/40 mt-0.5">
-                Source dated {clockTime(r.sourcePublishedAt)} (Europe/Berlin) ·{" "}
+                {t.fetched(clockTime(r.sourcePublishedAt))} (Europe/Berlin) ·{" "}
                 <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline">
-                  Original
+                  {t.original}
                 </a>
               </p>
             </div>
@@ -220,15 +226,9 @@ export function NewsInsights({ item }: { item: NewsItem }) {
           {state !== "loading" && (
             <>
               {hasOfficial ? (
-                <p className="italic">
-                  The official document(s) below match this article&apos;s institution, event type and date — that confirms only the
-                  specific statement or release it names, not every claim or market comment in this article.
-                </p>
+                <p className="italic">{t.officialMatchCaveat}</p>
               ) : (
-                <p className="italic text-ink/45">
-                  No matching official document found among the sources this app checks against — that does not mean no official
-                  statement exists, only that none was matched here.
-                </p>
+                <p className="italic text-ink/45">{t.noOfficialMatchCaveat}</p>
               )}
 
               {officialRecords.map((r) => (
@@ -236,23 +236,21 @@ export function NewsInsights({ item }: { item: NewsItem }) {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <p className="font-semibold text-ink/70">{r.label}</p>
                     {r.isSubsequentUpdate && (
-                      <span className="text-[10px] uppercase tracking-wide border border-ink/30 px-1 text-ink/50">
-                        Subsequent official update
-                      </span>
+                      <span className="text-[10px] uppercase tracking-wide border border-ink/30 px-1 text-ink/50">{t.subsequentOfficialUpdate}</span>
                     )}
                   </div>
                   {r.text ? (
                     <p className="italic">&ldquo;{r.text.length > 400 ? `${r.text.slice(0, 400)}…` : r.text}&rdquo;</p>
                   ) : (
-                    <p className="italic text-ink/40">No extractable text for this document — see the original link.</p>
+                    <p className="italic text-ink/40">{t.noExtractableText}</p>
                   )}
-                  {r.tablesOmitted && <p className="text-[10px] text-ink/50 font-semibold mt-0.5">Numerical projection tables not included</p>}
+                  {r.tablesOmitted && <p className="text-[10px] text-ink/50 font-semibold mt-0.5">{t.tablesOmitted}</p>}
                   <p className="text-[10px] text-ink/40 mt-0.5">
-                    Published {formatDocPublished(r)}
-                    {r.meetingDate && r.meetingDate !== r.sourcePublishedAt.slice(0, 10) ? ` · meeting held ${formatDocDate(r.meetingDate)}` : ""}
+                    {t.publishedDate(formatDocPublished(r))}
+                    {r.meetingDate && r.meetingDate !== r.sourcePublishedAt.slice(0, 10) ? t.meetingHeldSuffix(formatDocDate(r.meetingDate)) : ""}
                     {" · "}
                     <a href={r.url} target="_blank" rel="noopener noreferrer" className="underline">
-                      Original
+                      {t.original}
                     </a>
                   </p>
                 </div>
