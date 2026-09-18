@@ -9,9 +9,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Invalid exchange id." }, { status: 400 });
   }
 
-  const breakdown = await getCexTickerBreakdown(id);
+  const { value: breakdown, stale } = await getCexTickerBreakdown(id);
   if (!breakdown) {
     return NextResponse.json({ error: "No ticker breakdown available for this exchange." }, { status: 200 });
   }
-  return NextResponse.json(breakdown);
+  return NextResponse.json({ ...breakdown, stale });
 }

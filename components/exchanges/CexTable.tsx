@@ -88,10 +88,16 @@ export function CexTable({ venues, onExpand, expandedId }: { venues: CexVenue[];
               </a>
             </td>
             <td className="py-2 pr-2 text-ink/70">{v.trustScore !== null ? `${v.trustScore}/10` : "—"}</td>
-            <td className="py-2 pr-2 text-right tabular-nums">{formatQuantity(v.volumeBtc, "BTC")}</td>
+            <td className="py-2 pr-2 text-right tabular-nums">
+              {formatQuantity(v.volumeBtc, "BTC")}
+              {v.volumeKind === "unverified_daily_snapshot" && (
+                <span className="text-[10px] text-ink/40 block">Historical 24h volume snapshot — period total unverified</span>
+              )}
+            </td>
             <td className="py-2 pr-2 text-right tabular-nums">
               {v.volumeUsd !== null ? formatMarketCap(v.volumeUsd) : "—"}
-              {v.usdRateBasis === "current_rate" && <span className="text-[10px] text-ink/40 block">at today&apos;s rate</span>}
+              {v.usdRateBasis === "current_rate" && <span className="text-[10px] text-ink/40 block">estimated, at today&apos;s rate</span>}
+              {v.usdRateBasis === "daily_historical_rate" && <span className="text-[10px] text-ink/40 block">estimated USD equivalent</span>}
             </td>
             <td className="py-2">
               <button

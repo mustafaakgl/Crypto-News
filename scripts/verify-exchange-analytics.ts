@@ -15,6 +15,9 @@ import {
   sumVolumeBtc,
   priceAtOrBefore,
   sumVolumeUsdWithHistoricalRates,
+  completedDailyPoints,
+  validateDailySeries,
+  prepareDailySeries,
   type VolumePoint,
 } from "../lib/exchangeAnalytics/periodMath.ts";
 import { classifyQuoteCurrency, classifyBaseAsset } from "../lib/exchangeAnalytics/currencyClassification.ts";
@@ -112,6 +115,54 @@ const DAY_MS = 86_400_000;
 
   const volumeWithGap: VolumePoint[] = [{ timestampMs: -5000, volumeBtc: 10 }];
   assertEqual(sumVolumeUsdWithHistoricalRates(volumeWithGap, prices), null, "sumVolumeUsdWithHistoricalRates: a day with no matching historical price is excluded rather than guessed, and returns null if nothing could be matched at all");
+}
+
+// ---- completedDailyPoints / validateDailySeries / prepareDailySeries ----
+// Modeled directly on a real CoinGecko exchanges/{id}/volume_chart?days=30
+// response confirmed live (curl, binance, 2026-09-18): 30 points, uniform
+// 86400000ms gaps, timestamps at 00:00 UTC — but the LAST point is always
+// "today", hours before that day is actually over. Naively summing all 30
+// would silently include a partial day as if it were complete.
+{
+  const cleanThirty: VolumePoint[] = Array.from({ length: 30 }, (_, i) => ({ timestampMs: i * DAY_MS, volumeBtc: 100 + i }));
+  // "Now" is 8 hours into day 29 (the last point) — that day is not over yet.
+  const nowMidDay29 = 29 * DAY_MS + 8 * 60 * 60 * 1000;
+
+  const completed = completedDailyPoints(cleanThirty, nowMidDay29);
+  assertEqual(completed.length, 29, "completedDailyPoints: drops the trailing in-progress day (30 raw points -> 29 complete)");
+  assertEqual(completed[completed.length - 1].timestampMs, 28 * DAY_MS, "completedDailyPoints: last kept point is the last FULLY elapsed day, not today's partial one");
+
+  assertTrue(validateDailySeries(completed).ok, "validateDailySeries: uniform, gap-free daily series passes");
+
+  const withDuplicate = [...completed];
+  withDuplicate[16] = { ...withDuplicate[16], timestampMs: withDuplicate[15].timestampMs };
+  assertTrue(!validateDailySeries(withDuplicate).ok, "validateDailySeries: a repeated timestamp fails verification rather than being silently deduped");
+
+  const withGap = [...completed.slice(0, 15), ...completed.slice(16)]; // day 15 missing
+  assertTrue(!validateDailySeries(withGap).ok, "validateDailySeries: a missing day breaks uniform spacing and fails verification");
+
+  const thirtyDResult = prepareDailySeries(cleanThirty, "30d", nowMidDay29);
+  assertTrue(thirtyDResult.verified === true, "prepareDailySeries: 30d on a clean series verifies (using the 29 genuinely complete days, not the in-progress 30th)");
+  if (thirtyDResult.verified) {
+    assertEqual(thirtyDResult.points.length, 29, "prepareDailySeries: 30d never counts the unfinished trailing day toward the total");
+  }
+
+  const sevenDResult = prepareDailySeries(cleanThirty, "7d", nowMidDay29);
+  assertTrue(sevenDResult.verified === true, "prepareDailySeries: 7d on a clean 30-point series verifies");
+  if (sevenDResult.verified) {
+    assertEqual(sevenDResult.points.length, 7, "prepareDailySeries: 7d takes exactly the last 7 COMPLETE days");
+    assertEqual(sevenDResult.points[6].timestampMs, 28 * DAY_MS, "prepareDailySeries: 7d's last day is the last complete day, never today's partial one");
+  }
+
+  const tooFewForSeven = prepareDailySeries(cleanThirty.slice(0, 5), "7d", 5 * DAY_MS + 60 * 60 * 1000);
+  assertTrue(tooFewForSeven.verified === false, "prepareDailySeries: 7d with fewer than 7 completed days refuses to fabricate a period total");
+
+  const gappySeries: VolumePoint[] = [...cleanThirty.slice(0, 15), ...cleanThirty.slice(16)]; // day 15 missing, includes today's partial point too
+  const gappyResult = prepareDailySeries(gappySeries, "30d", nowMidDay29);
+  assertTrue(gappyResult.verified === false, "prepareDailySeries: a series with a missing day falls back to unverified rather than summing across the gap");
+  if (!gappyResult.verified) {
+    assertTrue(gappyResult.latestCompletePoint !== null, "prepareDailySeries: an unverified result still surfaces the latest complete day for a single-day snapshot fallback");
+  }
 }
 
 // ---- classifyQuoteCurrency ----

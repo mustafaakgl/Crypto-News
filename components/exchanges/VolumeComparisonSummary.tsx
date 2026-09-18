@@ -1,62 +1,66 @@
 import type { CexOverviewResult, DexOverviewResult } from "@/lib/exchangeAnalytics/types";
 import { formatMarketCap } from "@/lib/format";
 
-// Sums only the venues actually displayed (top N) — never presented as
-// "all CEX volume", since the ranking pool itself is scoped (see
-// lib/exchangeAnalytics/cexVenues.ts). Percentages are always labeled
-// "Share of selected venues", never "market share".
+// Deliberately does NOT compute a combined "CEX is X%, DEX is Y%" market
+// share: the CEX total here covers only the selected N venues (chosen by
+// TODAY's volume — see cexVenues.ts) while the DEX total is DefiLlama's
+// entire tracked-protocol universe, and their time windows don't exactly
+// align either (CEX = complete UTC calendar days; DEX = DefiLlama's own
+// trailing window as of its fetch time). Treating those two numbers as
+// parts of one whole would silently smuggle in a "this selection tells you
+// the whole market's CEX/DEX split" claim that the underlying data cannot
+// support. Instead, both totals are shown as independent bars (length
+// relative to whichever is larger) purely for a sense of scale, each with
+// its own explicit scope label.
 export function VolumeComparisonSummary({ cex, dex }: { cex: CexOverviewResult; dex: DexOverviewResult }) {
   const cexTotalUsd = cex.venues.reduce((sum, v) => sum + (v.volumeUsd ?? 0), 0);
   const cexHasUsd = cex.venues.some((v) => v.volumeUsd !== null);
   const dexTotalUsd = dex.totalVolumeUsd;
 
-  const combined = (cexHasUsd ? cexTotalUsd : 0) + (dexTotalUsd ?? 0);
-  const cexShare = combined > 0 && cexHasUsd ? (cexTotalUsd / combined) * 100 : null;
-  const dexShare = combined > 0 && dexTotalUsd !== null ? ((dexTotalUsd ?? 0) / combined) * 100 : null;
+  const maxUsd = Math.max(cexHasUsd ? cexTotalUsd : 0, dexTotalUsd ?? 0, 1);
+  const cexBarPct = cexHasUsd ? (cexTotalUsd / maxUsd) * 100 : 0;
+  const dexBarPct = dexTotalUsd !== null ? (dexTotalUsd / maxUsd) * 100 : 0;
 
   return (
-    <div className="space-y-2">
-      <div className="flex h-6 w-full overflow-hidden border border-ink/20" role="img" aria-label={`CEX (selected venues): ${cexShare?.toFixed(0) ?? "unknown"}%. DEX (DefiLlama total): ${dexShare?.toFixed(0) ?? "unknown"}%.`}>
-        {cexShare !== null && <div className="bg-accent h-full" style={{ width: `${cexShare}%` }} />}
-        {dexShare !== null && <div className="bg-ink h-full" style={{ width: `${dexShare}%` }} />}
-      </div>
+    <div className="space-y-3">
       <table className="w-full text-sm border-collapse">
-        <caption className="sr-only">CEX vs DEX volume comparison for the selected period</caption>
+        <caption className="sr-only">CEX vs DEX volume comparison for the selected period — two separately-scoped totals, not a market-share split</caption>
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-ink/50 border-b border-rule">
             <th scope="col" className="py-1">
-              Venue type
+              Venue type (scope)
             </th>
             <th scope="col" className="py-1 text-right">
               Volume (USD)
-            </th>
-            <th scope="col" className="py-1 text-right">
-              Share of selected venues
             </th>
           </tr>
         </thead>
         <tbody>
           <tr className="border-b border-rule/60">
-            <td className="py-1">
+            <td className="py-1.5">
               <span className="inline-block w-2.5 h-2.5 bg-accent mr-1.5 align-middle" aria-hidden />
-              CEX ({cex.venues.length} venue{cex.venues.length === 1 ? "" : "s"})
+              CEX — {cex.venues.length} selected exchange{cex.venues.length === 1 ? "" : "s"} only
             </td>
-            <td className="py-1 text-right tabular-nums">{cexHasUsd ? formatMarketCap(cexTotalUsd) : "—"}</td>
-            <td className="py-1 text-right tabular-nums">{cexShare !== null ? `${cexShare.toFixed(1)}%` : "—"}</td>
+            <td className="py-1.5 text-right tabular-nums">{cexHasUsd ? formatMarketCap(cexTotalUsd) : "—"}</td>
           </tr>
           <tr>
-            <td className="py-1">
+            <td className="py-1.5">
               <span className="inline-block w-2.5 h-2.5 bg-ink mr-1.5 align-middle" aria-hidden />
-              DEX (DefiLlama total, all spot DEXs)
+              DEX — DefiLlama&apos;s full tracked-protocol universe
             </td>
-            <td className="py-1 text-right tabular-nums">{dexTotalUsd !== null ? formatMarketCap(dexTotalUsd) : "—"}</td>
-            <td className="py-1 text-right tabular-nums">{dexShare !== null ? `${dexShare.toFixed(1)}%` : "—"}</td>
+            <td className="py-1.5 text-right tabular-nums">{dexTotalUsd !== null ? formatMarketCap(dexTotalUsd) : "—"}</td>
           </tr>
         </tbody>
       </table>
+      <div className="space-y-1.5" role="img" aria-label={`CEX (${cex.venues.length} selected venues): ${cexHasUsd ? formatMarketCap(cexTotalUsd) : "unknown"}. DEX (DefiLlama full universe): ${dexTotalUsd !== null ? formatMarketCap(dexTotalUsd) : "unknown"}. Shown for scale only, not a combined market share.`}>
+        <div className="h-3 bg-accent" style={{ width: `${Math.max(cexBarPct, cexHasUsd ? 1.5 : 0)}%` }} />
+        <div className="h-3 bg-ink" style={{ width: `${Math.max(dexBarPct, dexTotalUsd !== null ? 1.5 : 0)}%` }} />
+      </div>
       <p className="text-[11px] text-ink/50">
-        The DEX figure is DefiLlama&apos;s own global total (not limited to a venue count). The CEX figure is the sum of only the{" "}
-        {cex.venues.length} selected exchanges above — increasing the venue count changes this comparison.
+        These two bars compare absolute scale only — they are <strong>not</strong> a combined market-share split. The CEX total is only
+        the {cex.venues.length} selected exchanges above (increasing the venue count changes it); the DEX total is DefiLlama&apos;s own
+        global figure, unrelated to any venue count. Their time windows also don&apos;t exactly align (see Methodology below). A single
+        &quot;CEX is X% of the market&quot; figure is deliberately not computed from these two numbers.
       </p>
     </div>
   );

@@ -1,10 +1,12 @@
 import "server-only";
-import { fetchJson } from "@/lib/exchangeAnalytics/httpClient";
+import { fetchJson } from "@/lib/httpClient";
 import type { DexOverviewResult, DexProtocol, ExchangePeriod, VenueCount } from "@/lib/exchangeAnalytics/types";
-import { TtlCache } from "@/lib/rag/cache";
+import { TtlCache, type StaleAwareResult } from "@/lib/rag/cache";
 
 const LLAMA_BASE = "https://api.llama.fi";
 const REVALIDATE_SECONDS = 600;
+const RESULT_TTL_MS = REVALIDATE_SECONDS * 1000;
+const RESULT_STALE_TTL_MS = 60 * 60 * 1000; // up to 1h old, then a cold recompute is forced
 
 // DefiLlama's /overview/dexs/protocols array mixes in several NON-dex
 // categories (DEX Aggregator, Prediction Market, Lending, Bridge, ...) —
@@ -46,9 +48,9 @@ const overviewCache = new TtlCache<DexOverviewResult>();
 // (summing all protocols over- or under-counts vs. the real total,
 // confirmed empirically: neither "sum everything" nor "sum category==Dexs
 // only" exactly matches DefiLlama's own top-level figure).
-export async function getDexOverview(period: ExchangePeriod, count: VenueCount): Promise<DexOverviewResult> {
+export async function getDexOverview(period: ExchangePeriod, count: VenueCount): Promise<StaleAwareResult<DexOverviewResult>> {
   const cacheKey = `dex:${period}:${count}`;
-  return overviewCache.getOrCompute(
+  return overviewCache.getFreshOrStale(
     cacheKey,
     async (): Promise<DexOverviewResult> => {
       const warnings: string[] = [];
@@ -95,6 +97,6 @@ export async function getDexOverview(period: ExchangePeriod, count: VenueCount):
         warnings,
       };
     },
-    (r) => r.protocols.length > 0
+    { shouldCache: (r) => r.protocols.length > 0, ttlMs: RESULT_TTL_MS, staleTtlMs: RESULT_STALE_TTL_MS }
   );
 }

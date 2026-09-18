@@ -1,3 +1,5 @@
+import { fetchJson, COINGECKO_PACE_KEY, COINGECKO_MIN_INTERVAL_MS } from "@/lib/httpClient";
+
 export type MarketAsset = {
   id: string; // CoinGecko id, e.g. "bitcoin"
   symbol: string; // uppercase ticker, e.g. "BTC"
@@ -34,12 +36,13 @@ export async function getMarketPrices(): Promise<MarketPricesResult> {
     `&price_change_percentage=24h&sparkline=false`;
 
   try {
-    const res = await fetch(url, {
-      next: { revalidate: REVALIDATE_SECONDS },
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as Array<{
+    // Paced against the SAME shared CoinGecko budget Exchange Analytics
+    // uses — this endpoint and that feature's calls both count against the
+    // one anonymous rate limit, so they're throttled against one shared
+    // clock rather than each assuming the other isn't calling too.
+    const result = await fetchJson(url, "CoinGecko markets", REVALIDATE_SECONDS, { key: COINGECKO_PACE_KEY, minIntervalMs: COINGECKO_MIN_INTERVAL_MS });
+    if (!result.ok) throw new Error(result.error);
+    const data = result.data as Array<{
       id: string;
       symbol: string;
       name: string;

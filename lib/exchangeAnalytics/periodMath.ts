@@ -31,6 +31,75 @@ export function sliceForPeriod(points: VolumePoint[], period: ExchangePeriod): V
   return points; // "30d" and "1y" use the full fetched series as-is
 }
 
+const DAY_MS = 86_400_000;
+
+// CoinGecko's daily-granularity series always includes a trailing bucket
+// for the CURRENT (still in-progress) UTC day — confirmed empirically: for
+// `days=30` the last point's timestamp is always today 00:00 UTC, hours
+// before that day is over. Summing it as if it were a full day would
+// understate "today" and silently make a "7D"/"30D" total include a
+// partial day without saying so. A point only counts as a genuine
+// completed day once its OWN 24h window (`timestampMs + dayMs`) has fully
+// elapsed relative to `nowMs`.
+export function completedDailyPoints(points: VolumePoint[], nowMs: number, dayMs = DAY_MS): VolumePoint[] {
+  return points.filter((p) => p.timestampMs + dayMs <= nowMs);
+}
+
+export type SeriesValidation = { ok: true } | { ok: false; reason: string };
+
+// Verifies the assumption `sliceForPeriod`/`sumVolumeBtc` depend on: that
+// consecutive points are exactly one day apart (no gap, no duplicate) and
+// therefore genuinely non-overlapping. This is checked at RUNTIME against
+// the actual returned series — requesting `days=30` is never treated as
+// proof by itself that CoinGecko returned 30 clean, contiguous daily
+// buckets (a missing day, a repeated timestamp, or a provider hiccup would
+// all silently corrupt a naive sum).
+export function validateDailySeries(points: VolumePoint[], dayMs = DAY_MS, toleranceMs = 60_000): SeriesValidation {
+  if (points.length === 0) return { ok: false, reason: "no daily points available" };
+  const seen = new Set<number>();
+  for (let i = 0; i < points.length; i++) {
+    if (seen.has(points[i].timestampMs)) {
+      return { ok: false, reason: `duplicate timestamp at index ${i}` };
+    }
+    seen.add(points[i].timestampMs);
+    if (i > 0) {
+      const gap = points[i].timestampMs - points[i - 1].timestampMs;
+      if (Math.abs(gap - dayMs) > toleranceMs) {
+        return { ok: false, reason: `non-uniform gap between points ${i - 1} and ${i} (${gap}ms, expected ~${dayMs}ms) — likely a missing or overlapping day` };
+      }
+    }
+  }
+  return { ok: true };
+}
+
+export type PreparedDailySeries =
+  | { verified: true; points: VolumePoint[] }
+  | { verified: false; reason: string; latestCompletePoint: VolumePoint | null };
+
+// The single entry point cexVenues.ts uses to turn a raw volume_chart
+// response into either a verified period total or an honest "could not
+// verify" fallback. Never produces a period total from a series that
+// failed validation, per the rule this exists to enforce.
+export function prepareDailySeries(rawPoints: VolumePoint[], period: ExchangePeriod, nowMs: number, dayMs = DAY_MS): PreparedDailySeries {
+  const sorted = [...rawPoints].sort((a, b) => a.timestampMs - b.timestampMs);
+  const completed = completedDailyPoints(sorted, nowMs, dayMs);
+  const sliced = sliceForPeriod(completed, period);
+  const latestCompletePoint = completed.length > 0 ? completed[completed.length - 1] : null;
+
+  if (period === "7d" && sliced.length < 7) {
+    return { verified: false, reason: `only ${sliced.length} completed day(s) available, need 7`, latestCompletePoint };
+  }
+  if (sliced.length === 0) {
+    return { verified: false, reason: "no completed daily points available", latestCompletePoint };
+  }
+
+  const validation = validateDailySeries(sliced, dayMs);
+  if (!validation.ok) {
+    return { verified: false, reason: validation.reason, latestCompletePoint };
+  }
+  return { verified: true, points: sliced };
+}
+
 export type PeriodWindow = { startMs: number; endMs: number };
 
 // For period totals, the window is derived from the ACTUAL daily points
