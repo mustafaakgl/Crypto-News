@@ -435,7 +435,7 @@ const en = {
 
   flows: {
     heading: "Exchange Flows",
-    scopeLine: "Tracked wallets · Ethereum · Partial coverage",
+    scopeLine: (network: string) => `Tracked wallets · ${network} · Partial coverage`,
     asset: "Asset",
     network: "Network",
     ariaSelectAsset: "Select asset",
@@ -458,7 +458,7 @@ const en = {
     colUpdated: "Updated",
     betweenIn: (v: string) => `in ${v}`,
     betweenOut: (v: string) => `out ${v}`,
-    notTracked: "Not tracked yet — wallet coverage for this exchange hasn't been checked.",
+    notTracked: "Not tracked for this asset yet — wallet coverage for this exchange hasn't been checked.",
     notCollected: "Not enough collected history for this period yet.",
     historyTooShort: (from: string, needed: string) => `Flow history is collected from ${from}; this period needs data from ${needed}.`,
     tableCaption: (asset: string, period: string) => `Exchange ${asset} flows on tracked wallets for ${period}`,
@@ -470,7 +470,15 @@ const en = {
     methodology: [
       [
         "What is counted",
-        "USDT and USDC transfers on Ethereum into and out of wallets Dune labels as belonging to each exchange (cex.addresses). Net flow = inflow − outflow. Amounts are in token units; both are USD-pegged stablecoins.",
+        "USDT and USDC on Ethereum (Binance, OKX, Bybit) and BTC on Bitcoin (Binance only) moving into and out of each exchange's known wallets. Net flow = inflow − outflow, in the asset's own units; USDT and USDC are USD-pegged.",
+      ],
+      [
+        "Which wallets",
+        "Dune's exchange address labels (cex.addresses), plus for Binance the hot and cold wallets it publishes in its proof of reserves (audit of 1 Sept 2026). Checked against that list, Dune's labels alone covered 93% of Binance's BTC, 95% of its USDT but only 57% of its USDC reserve balance; with the published wallets added, coverage is effectively complete for those reserve wallets. OKX and Bybit use Dune's labels only. Mining-pool wallets are left out.",
+      ],
+      [
+        "Bitcoin",
+        "Bitcoin moves in transactions that spend whole earlier outputs and send change back. A transaction counts as a Binance inflow when Binance isn't among its senders; when Binance is a sender, what goes to other addresses is outflow and what comes back to Binance (change, moves between its own wallets) is excluded.",
       ],
       [
         "Own wallets",
@@ -482,7 +490,7 @@ const en = {
       ],
       [
         "Partial coverage",
-        "Only labeled hot and cold wallets are tracked, not the per-customer deposit addresses, so a deposit is seen when the exchange sweeps it into a labeled wallet. The labels were last extended in August 2025, so wallets added since are missing: figures are a lower bound, not an exchange's total.",
+        "Only hot and cold wallets are tracked, not the per-customer deposit addresses, so a deposit is seen when the exchange sweeps it into one of those wallets. For OKX and Bybit, Dune's labels were last extended in August 2025, so wallets added since are missing and their figures are a lower bound.",
       ],
       [
         "What this is not",

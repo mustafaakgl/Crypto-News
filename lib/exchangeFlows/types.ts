@@ -1,16 +1,17 @@
 import type { ExchangePeriod } from "@/lib/exchangeAnalytics/types";
 
-// Only what's actually collected: stablecoins on Ethereum (see lib/exchangeFlows/duneSql.ts).
-export type FlowAsset = "USDT" | "USDC";
+// Only what's actually collected (see lib/exchangeFlows/duneSql.ts).
+export type FlowAsset = "USDT" | "USDC" | "BTC";
 
 // Always explicit, so a USDT-on-Ethereum figure is never presented as USDT across all chains.
 export type FlowNetwork = "bitcoin" | "ethereum" | "tron" | "solana" | null;
 
-export const FLOW_ASSETS: FlowAsset[] = ["USDT", "USDC"];
+export const FLOW_ASSETS: FlowAsset[] = ["USDT", "USDC", "BTC"];
 
 export const FLOW_NETWORKS_BY_ASSET: Record<FlowAsset, FlowNetwork[]> = {
   USDT: ["ethereum"],
   USDC: ["ethereum"],
+  BTC: ["bitcoin"],
 };
 
 export type FlowRowCoverage = "available" | "unavailable";

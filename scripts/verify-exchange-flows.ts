@@ -12,6 +12,7 @@ import {
   DAY_MS,
 } from "../lib/exchangeFlows/flowsMath.ts";
 import type { DailyFlowPoint, ExchangeFlowRow } from "../lib/exchangeFlows/types.ts";
+import { bitcoinFlowsSql, exchangeFlowsSql } from "../lib/exchangeFlows/duneSql.ts";
 
 let failures = 0;
 
@@ -100,6 +101,30 @@ function isoDate(daysFromEpoch: number): string {
   assertEqual(sumAvailable([10, null, 20]), 30, "sumAvailable: sums only the available values, skipping unavailable ones rather than treating them as 0");
   assertEqual(sumAvailable([null, null]), null, "sumAvailable: null when NOTHING is available — distinct from a real 0 total");
   assertEqual(sumAvailable([]), null, "sumAvailable: empty input -> null, never a fabricated 0");
+}
+
+// ---- Dune SQL builders: inputs are validated before being inlined ----
+{
+  const throws = (fn: () => unknown) => {
+    try {
+      fn();
+      return false;
+    } catch {
+      return true;
+    }
+  };
+  const eth = "0x28c6c06298d514db089934071355e5743bf21d60";
+  const sql = exchangeFlowsSql("2026-09-14", "2026-09-21", [{ address: eth, cexName: "Binance" }]);
+  assertTrue(sql.includes(`address NOT IN (${eth})`) && sql.includes(`(${eth}, 'Binance')`), "published wallets replace Dune's label for the same address");
+  assertTrue(sql.includes("NOT LIKE '% Pool%'"), "mining-pool labels are excluded");
+  assertTrue(!exchangeFlowsSql("2026-09-14", "2026-09-21").includes("VALUES"), "no extra labels -> Dune labels only");
+  assertTrue(throws(() => exchangeFlowsSql("2026-09-14'; DROP", "2026-09-21")), "a malformed date is rejected");
+  assertTrue(throws(() => exchangeFlowsSql("2026-09-14", "2026-09-21", [{ address: "0x1'); --", cexName: "Binance" }])), "a malformed Ethereum address is rejected");
+  assertTrue(throws(() => exchangeFlowsSql("2026-09-14", "2026-09-21", [{ address: eth, cexName: "Bin'ance" }])), "a quote in an exchange name is rejected");
+  const btc = bitcoinFlowsSql("Binance", "2026-09-14", "2026-09-21", [{ address: "bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h", cexName: "Binance" }]);
+  assertTrue(btc.includes("('bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h', 'Binance')") && btc.includes("FROM bitcoin.blocks"), "bitcoin query inlines published wallets and reads chain freshness from blocks");
+  assertTrue(throws(() => bitcoinFlowsSql("Binance", "2026-09-14", "2026-09-21", [{ address: "1abc' OR 1=1 --", cexName: "Binance" }])), "a malformed Bitcoin address is rejected");
+  assertTrue(throws(() => bitcoinFlowsSql("Binance'", "2026-09-14", "2026-09-21")), "a quote in the bitcoin exchange name is rejected");
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

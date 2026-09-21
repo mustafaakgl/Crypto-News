@@ -149,7 +149,7 @@ export function FlowsTab({
     <div className="space-y-5">
       <div>
         <h2 className="font-serif text-xl font-700">{t.heading}</h2>
-        <p className="text-xs uppercase tracking-wide text-ink/50 mt-0.5">{t.scopeLine}</p>
+        <p className="text-xs uppercase tracking-wide text-ink/50 mt-0.5">{t.scopeLine(network ? t.networkLabels[network] : "")}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-4 border-b border-rule pb-4">

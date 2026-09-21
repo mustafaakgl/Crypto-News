@@ -437,7 +437,7 @@ const de = {
 
   flows: {
     heading: "Exchange Flows",
-    scopeLine: "Erfasste Wallets · Ethereum · Teilweise Abdeckung",
+    scopeLine: (network: string) => `Erfasste Wallets · ${network} · Teilweise Abdeckung`,
     asset: "Asset",
     network: "Netzwerk",
     ariaSelectAsset: "Asset wählen",
@@ -460,7 +460,7 @@ const de = {
     colUpdated: "Aktualisiert",
     betweenIn: (v: string) => `zu ${v}`,
     betweenOut: (v: string) => `ab ${v}`,
-    notTracked: "Noch nicht erfasst — die Wallet-Abdeckung dieser Börse wurde noch nicht geprüft.",
+    notTracked: "Für dieses Asset noch nicht erfasst — die Wallet-Abdeckung dieser Börse wurde noch nicht geprüft.",
     notCollected: "Für diesen Zeitraum liegt noch nicht genug gesammelter Verlauf vor.",
     historyTooShort: (from: string, needed: string) => `Der Flussverlauf wird seit ${from} gesammelt; dieser Zeitraum benötigt Daten ab ${needed}.`,
     tableCaption: (asset: string, period: string) => `${asset}-Zu- und -Abflüsse erfasster Börsen-Wallets für ${period}`,
@@ -472,7 +472,15 @@ const de = {
     methodology: [
       [
         "Was gezählt wird",
-        "USDT- und USDC-Transfers auf Ethereum in und aus Wallets, die Dune der jeweiligen Börse zuordnet (cex.addresses). Nettofluss = Zufluss − Abfluss. Beträge in Token-Einheiten; beide sind an den USD gekoppelte Stablecoins.",
+        "USDT und USDC auf Ethereum (Binance, OKX, Bybit) sowie BTC auf Bitcoin (nur Binance), die in bekannte Wallets der jeweiligen Börse fließen oder sie verlassen. Nettofluss = Zufluss − Abfluss, in Einheiten des jeweiligen Assets; USDT und USDC sind an den USD gekoppelt.",
+      ],
+      [
+        "Welche Wallets",
+        "Dunes Börsen-Adresszuordnungen (cex.addresses), bei Binance ergänzt um die Hot- und Cold-Wallets aus seinem Reservenachweis (Prüfung vom 1. Sept. 2026). Gegen diese Liste geprüft deckten Dunes Zuordnungen allein 93 % des BTC-, 95 % des USDT-, aber nur 57 % des USDC-Reservebestands von Binance ab; mit den veröffentlichten Wallets ist die Abdeckung dieser Reserve-Wallets praktisch vollständig. OKX und Bybit nutzen nur Dunes Zuordnungen. Mining-Pool-Wallets sind ausgeschlossen.",
+      ],
+      [
+        "Bitcoin",
+        "Bitcoin wird in Transaktionen bewegt, die frühere Outputs vollständig ausgeben und Wechselgeld zurücksenden. Eine Transaktion zählt als Binance-Zufluss, wenn Binance nicht unter den Absendern ist; ist Binance Absender, zählt, was an andere Adressen geht, als Abfluss, und was zu Binance zurückkommt (Wechselgeld, Bewegungen zwischen eigenen Wallets), wird ausgeschlossen.",
       ],
       [
         "Eigene Wallets",
@@ -484,7 +492,7 @@ const de = {
       ],
       [
         "Teilweise Abdeckung",
-        "Erfasst werden nur zugeordnete Hot- und Cold-Wallets, nicht die Einzahlungsadressen einzelner Kunden; eine Einzahlung wird also sichtbar, wenn die Börse sie in eine zugeordnete Wallet überführt. Die Zuordnungen wurden zuletzt im August 2025 erweitert, seitdem hinzugekommene Wallets fehlen: Die Werte sind eine Untergrenze, nicht die Gesamtsumme einer Börse.",
+        "Erfasst werden nur Hot- und Cold-Wallets, nicht die Einzahlungsadressen einzelner Kunden; eine Einzahlung wird also sichtbar, wenn die Börse sie in eine dieser Wallets überführt. Für OKX und Bybit wurden Dunes Zuordnungen zuletzt im August 2025 erweitert, seitdem hinzugekommene Wallets fehlen, ihre Werte sind daher eine Untergrenze.",
       ],
       [
         "Was das nicht ist",

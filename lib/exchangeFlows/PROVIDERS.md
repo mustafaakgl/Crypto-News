@@ -27,10 +27,25 @@ encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).
   outflow rather than an exchange-to-exchange one.
 - Same-exchange transfers are large (Binance USDT: $2.68B over the 7 days
   tested, about as much as its inflow) and are excluded from in/out.
+- Binance's own reserve wallets are added on top of Dune's labels, from its
+  proof of reserves (audit PR01SEP26, snapshot 2026-09-01; hot/cold list in
+  [`porLabels/binance-20260901.json`](./porLabels/binance-20260901.json)).
+  Checked against that list, Dune's labels alone covered 93.3% of the BTC,
+  95.1% of the USDT and only 56.5% of the USDC balance (two unlabeled USDC
+  wallets held $2.36B). With the published wallets added, Binance's USDC
+  7-day inflow went from $690M to $3.66B and USDT's net from +$273M to +$555M.
+  The label version is part of the collector's source key, so a new audit
+  file triggers a fresh backfill.
+- Bitcoin (Binance only): UTXO rules per transaction in `bitcoinFlowsSql`;
+  30-day backfill cost 1.24 credits. Dune's Bitcoin labels for other
+  exchanges are too thin to use (Bybit 4, Coinbase 13 addresses).
+- Mining-pool labels ("Binance Pool …") are excluded: payouts to miners
+  aren't exchange withdrawals.
 - `cex.flows` (Dune's own curated table) wasn't used because it doesn't
   document how it handles same-exchange transfers.
-- Not covered: Bitcoin (not in Dune's curated CEX flows), bank deposits and
-  withdrawals in USD/EUR (not visible on-chain).
+- Not covered: bank deposits and withdrawals in USD/EUR (not visible
+  on-chain); per-customer deposit addresses (Binance publishes 3.19M of
+  them, 350 MB — would need a Dune table upload).
 
 ## Alternatives evaluated (2026-09, docs read, no account created, no plan started)
 
@@ -69,7 +84,7 @@ encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).
 1. Another exchange: check its Ethereum labels in `cex.addresses` against the
    wallet list it publishes (e.g. proof-of-reserves) before adding it to
    `DUNE_TRACKED_VENUES`.
-2. Bitcoin flows: needs a paid provider (Glassnode or CryptoQuant
-   Professional); implement `FlowsProvider` against it.
+2. Bitcoin for more exchanges: add their published reserve wallets the same
+   way, then add them to `DUNE_BITCOIN_VENUES`.
 3. 1Y: the collector backfills 30 days; extend `BACKFILL_DAYS` once the
    credit cost of a longer window has been measured.

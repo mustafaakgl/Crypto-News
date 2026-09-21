@@ -1,7 +1,6 @@
 import "server-only";
 import { PERIOD_DAYS } from "@/lib/exchangeVolume/aggregate";
-import { FLOWS_SOURCE } from "@/lib/collector/duneFlows";
-import { DUNE_TRACKED_VENUES } from "@/lib/exchangeFlows/duneSql";
+import { FLOW_NETWORKS, flowsSourceKey, trackedFlowVenues, type FlowsNetwork } from "@/lib/collector/duneFlows";
 import type { FlowsDailySeriesParams, FlowsOverviewParams, FlowsProvider } from "@/lib/exchangeFlows/provider";
 import type { ExchangeFlowDailySeries, ExchangeFlowRow, ExchangeFlowsResult } from "@/lib/exchangeFlows/types";
 import { DAY_MS, dayToIso, getDb, hasDb } from "@/lib/store/db";
@@ -9,14 +8,18 @@ import { DAY_MS, dayToIso, getDb, hasDb } from "@/lib/store/db";
 type Sync = { first_day: number; complete_through_day: number; data_through_ms: number; updated_at: number };
 type Sums = { inflow_ext: number; inflow_cex: number; outflow_ext: number; outflow_cex: number; internal: number; days: number };
 
-const TRACKED = new Set<string>(DUNE_TRACKED_VENUES.map((v) => v.id));
-
-function readSync(): Sync | undefined {
-  return getDb().prepare("SELECT first_day, complete_through_day, data_through_ms, updated_at FROM flows_sync WHERE source = ?").get(FLOWS_SOURCE) as Sync | undefined;
+function readSync(network: FlowsNetwork): Sync | undefined {
+  return getDb().prepare("SELECT first_day, complete_through_day, data_through_ms, updated_at FROM flows_sync WHERE source = ?").get(flowsSourceKey(network)) as
+    | Sync
+    | undefined;
 }
 
 export function storedFlowsAvailable(): boolean {
-  return hasDb() && readSync() !== undefined;
+  return hasDb() && FLOW_NETWORKS.some((n) => readSync(n) !== undefined);
+}
+
+function isFlowsNetwork(v: string | null): v is FlowsNetwork {
+  return (FLOW_NETWORKS as (string | null)[]).includes(v);
 }
 
 // The window ends at the last day Dune had fully ingested, not blindly at yesterday.
@@ -28,7 +31,11 @@ function windowFor(sync: Sync, periodDays: number) {
 
 export class StoredFlowsProvider implements FlowsProvider {
   async getOverview({ asset, network, period, candidates }: FlowsOverviewParams): Promise<ExchangeFlowsResult> {
-    const sync = readSync()!;
+    const sync = isFlowsNetwork(network) ? readSync(network) : undefined;
+    if (!sync || !isFlowsNetwork(network)) {
+      return { status: "not_configured", asset, network, period, reason: "No collected flow data for this network yet.", candidatesEvaluated: [] };
+    }
+    const tracked = new Set(trackedFlowVenues(network));
     const { startDay, endDay, covered } = windowFor(sync, PERIOD_DAYS[period]);
     const sumStmt = getDb().prepare(
       `SELECT sum(inflow_ext) AS inflow_ext, sum(inflow_cex) AS inflow_cex, sum(outflow_ext) AS outflow_ext,
@@ -50,7 +57,7 @@ export class StoredFlowsProvider implements FlowsProvider {
         coverage: "unavailable",
         updatedAt: null,
       };
-      if (!TRACKED.has(c.id)) return { ...empty, unavailableReason: "not_tracked" };
+      if (!tracked.has(c.id)) return { ...empty, unavailableReason: "not_tracked" };
       if (!covered) return { ...empty, unavailableReason: "not_collected" };
       const s = sumStmt.get(c.id, asset, network, startDay, endDay) as Sums;
       if (s.days !== endDay - startDay + 1) return { ...empty, unavailableReason: "not_collected" };
@@ -90,8 +97,9 @@ export class StoredFlowsProvider implements FlowsProvider {
   }
 
   async getDailySeries({ exchangeId, asset, network, period }: FlowsDailySeriesParams): Promise<ExchangeFlowDailySeries> {
-    if (!TRACKED.has(exchangeId)) return null;
-    const sync = readSync()!;
+    if (!isFlowsNetwork(network)) return null;
+    const sync = readSync(network);
+    if (!sync || !trackedFlowVenues(network).includes(exchangeId)) return null;
     const { startDay, endDay } = windowFor(sync, PERIOD_DAYS[period]);
     const rows = getDb()
       .prepare(

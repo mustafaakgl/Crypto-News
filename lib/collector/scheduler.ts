@@ -1,7 +1,7 @@
 import "server-only";
 import { collectVenueDaily } from "@/lib/collector/cexDaily";
 import { collectDexCandles } from "@/lib/collector/dexCandles";
-import { collectDuneFlows, flowsCollectionDue } from "@/lib/collector/duneFlows";
+import { collectDuneFlows, FLOW_NETWORKS, flowsCollectionDue, flowsSourceKey, type FlowsNetwork } from "@/lib/collector/duneFlows";
 import { duneConfigured } from "@/lib/exchangeFlows/duneClient";
 import { CEX_VENUES, type CexVenueId } from "@/lib/exchangeVolume/venues";
 import { getDb, toDay } from "@/lib/store/db";
@@ -63,11 +63,11 @@ function dexDue(nowMs: number): boolean {
 }
 
 // Each attempt costs Dune credits, so a day that isn't complete yet is retried at most hourly.
-function flowsDue(nowMs: number): boolean {
-  if (!duneConfigured() || nowMs % 86_400_000 < FLOWS_AFTER_MS || !flowsCollectionDue(nowMs)) return false;
+function flowsDue(network: FlowsNetwork, nowMs: number): boolean {
+  if (!duneConfigured() || nowMs % 86_400_000 < FLOWS_AFTER_MS || !flowsCollectionDue(network, nowMs)) return false;
   const last = getDb()
-    .prepare("SELECT started_at FROM collection_runs WHERE job = 'dune_flows' AND coalesce(detail, '') != ? ORDER BY started_at DESC LIMIT 1")
-    .get(INTERRUPTED) as { started_at: number } | undefined;
+    .prepare("SELECT started_at FROM collection_runs WHERE job = 'dune_flows' AND target = ? AND coalesce(detail, '') != ? ORDER BY started_at DESC LIMIT 1")
+    .get(flowsSourceKey(network), INTERRUPTED) as { started_at: number } | undefined;
   return !last || nowMs - last.started_at > 60 * 60 * 1000;
 }
 
@@ -88,14 +88,16 @@ function tick() {
       }
     });
   }
-  if (flowsDue(nowMs)) {
-    void runExclusive("dune_flows", async () => {
-      const id = startRun("dune_flows", "ethereum");
+  for (const network of FLOW_NETWORKS) {
+    if (!flowsDue(network, nowMs)) continue;
+    void runExclusive(`dune_flows:${network}`, async () => {
+      // Target is the source key, so a new label version isn't held back by the old one's retry window.
+      const id = startRun("dune_flows", flowsSourceKey(network));
       try {
-        const r = await collectDuneFlows();
-        const detail = `credits=${r.credits ?? "?"} from=${r.fromDay} through=${r.completeThrough ?? "none"} execution=${r.executionId}`;
+        const r = await collectDuneFlows(network);
+        const detail = `credits=${r.credits.toFixed(3)} from=${r.fromDay} through=${r.completeThrough ?? "none"} executions=${r.executions.join(",")}`;
         finishRun(id, r.completeThrough ? "ok" : "partial", r.rowsWritten, 0, r.rowsWritten, detail);
-        console.log(`[collector] dune flows: ${detail}`);
+        console.log(`[collector] dune flows ${network}: ${detail}`);
       } catch (err) {
         finishRun(id, "error", 0, 0, 0, err instanceof Error ? err.message : String(err));
         throw err;
