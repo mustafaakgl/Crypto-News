@@ -44,6 +44,16 @@ encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).
   OKX's BTC, 57.7% of its USDT and 0.9% of its USDC reserve balance. Adding
   them moved OKX's own hot ↔ cold transfers out of in/out: USDT 7-day inflow
   went from $1.38B to $1.14B and net from −$16M to +$39M.
+- The other eight exchanges are tracked on Ethereum with Dune's labels only
+  and marked "unverified" per row. None of them publishes a downloadable
+  wallet list to check against (checked 2026-09-21): Coinbase, Upbit and
+  Kraken publish no list; KuCoin, Bitget and Gate prove wallet ownership to
+  their auditor and publish Merkle tooling, not addresses. An unverified
+  exchange with zero transfers on its labels over a period is shown as "no
+  labeled activity" rather than 0 (Kraken's 231 Ethereum labels saw no USDT
+  in the week tested). Adding them cost almost nothing: the 30-day Ethereum
+  backfill went from 1.3 to 1.7 credits. The 30-day Bitcoin backfill for
+  Binance and OKX cost 13–20 credits.
 - Bybit's current wallet list is only downloadable after logging in (the
   only public file is from 2022-12), so Bybit uses Dune's labels alone.
 - Bitcoin (Binance, OKX): UTXO rules per transaction in `bitcoinFlowsSql`;

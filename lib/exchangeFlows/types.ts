@@ -35,7 +35,9 @@ export type ExchangeFlowRow = {
   // Transfers between this exchange's own wallets; excluded from inflow/outflow.
   internalExcluded: number | null;
   coverage: FlowRowCoverage;
-  unavailableReason?: "not_tracked" | "not_collected";
+  unavailableReason?: "not_tracked" | "not_collected" | "no_labeled_activity";
+  // "verified": the exchange's own published reserve wallets are included; "dune_labels": Dune's labels only.
+  coverageBasis: "verified" | "dune_labels" | null;
   // The provider's own data timestamp for this row (when its last
   // observation was), not this server's fetch time.
   updatedAt: string | null;

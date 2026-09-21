@@ -16,5 +16,11 @@ export const LABELS_VERSION = `por-binance-${binance.snapshot}-okx-${okx.snapsho
 
 const asLabels = (addresses: string[], cexName: string): ExtraLabel[] => addresses.map((address) => ({ address, cexName }));
 
+// Venues whose flows rest on their own published wallet list rather than Dune's labels alone.
+export const VERIFIED_VENUES: Record<"ethereum" | "bitcoin", string[]> = {
+  ethereum: ["binance", "okx"],
+  bitcoin: ["binance", "okx"],
+};
+
 export const ETHEREUM_EXTRA_LABELS = [...asLabels(binance.ethereum, "Binance"), ...asLabels(okx.ethereum, "OKX")];
 export const BITCOIN_EXTRA_LABELS = [...asLabels(binance.bitcoin, "Binance"), ...asLabels(okx.bitcoin, "OKX")];

@@ -2,11 +2,12 @@ import "server-only";
 import { PERIOD_DAYS } from "@/lib/exchangeVolume/aggregate";
 import { FLOW_NETWORKS, flowsSourceKey, trackedFlowVenues, type FlowsNetwork } from "@/lib/collector/duneFlows";
 import type { FlowsDailySeriesParams, FlowsOverviewParams, FlowsProvider } from "@/lib/exchangeFlows/provider";
+import { VERIFIED_VENUES } from "@/lib/exchangeFlows/porLabels";
 import type { ExchangeFlowDailySeries, ExchangeFlowRow, ExchangeFlowsResult } from "@/lib/exchangeFlows/types";
 import { DAY_MS, dayToIso, getDb, hasDb } from "@/lib/store/db";
 
 type Sync = { first_day: number; complete_through_day: number; data_through_ms: number; updated_at: number };
-type Sums = { inflow_ext: number; inflow_cex: number; outflow_ext: number; outflow_cex: number; internal: number; days: number };
+type Sums = { inflow_ext: number; inflow_cex: number; outflow_ext: number; outflow_cex: number; internal: number; legs: number; days: number };
 
 function readSync(network: FlowsNetwork): Sync | undefined {
   return getDb().prepare("SELECT first_day, complete_through_day, data_through_ms, updated_at FROM flows_sync WHERE source = ?").get(flowsSourceKey(network)) as
@@ -39,7 +40,7 @@ export class StoredFlowsProvider implements FlowsProvider {
     const { startDay, endDay, covered } = windowFor(sync, PERIOD_DAYS[period]);
     const sumStmt = getDb().prepare(
       `SELECT sum(inflow_ext) AS inflow_ext, sum(inflow_cex) AS inflow_cex, sum(outflow_ext) AS outflow_ext,
-              sum(outflow_cex) AS outflow_cex, sum(internal) AS internal, count(*) AS days
+              sum(outflow_cex) AS outflow_cex, sum(internal) AS internal, sum(legs) AS legs, count(*) AS days
        FROM exchange_flows_daily WHERE venue = ? AND asset = ? AND network = ? AND day BETWEEN ? AND ?`
     );
     const updatedAt = new Date(sync.updated_at).toISOString();
@@ -55,12 +56,16 @@ export class StoredFlowsProvider implements FlowsProvider {
         outflowToExchanges: null,
         internalExcluded: null,
         coverage: "unavailable",
+        coverageBasis: null,
         updatedAt: null,
       };
       if (!tracked.has(c.id)) return { ...empty, unavailableReason: "not_tracked" };
       if (!covered) return { ...empty, unavailableReason: "not_collected" };
       const s = sumStmt.get(c.id, asset, network, startDay, endDay) as Sums;
       if (s.days !== endDay - startDay + 1) return { ...empty, unavailableReason: "not_collected" };
+      const verified = VERIFIED_VENUES[network].includes(c.id);
+      // Zero transfers on an unverified exchange's labels means the labels are stale, not that nothing moved.
+      if (!verified && s.legs === 0) return { ...empty, unavailableReason: "no_labeled_activity" };
       const inflow = s.inflow_ext + s.inflow_cex;
       const outflow = s.outflow_ext + s.outflow_cex;
       return {
@@ -72,6 +77,7 @@ export class StoredFlowsProvider implements FlowsProvider {
         outflowToExchanges: s.outflow_cex,
         internalExcluded: s.internal,
         coverage: "available",
+        coverageBasis: verified ? "verified" : "dune_labels",
         updatedAt,
       };
     });

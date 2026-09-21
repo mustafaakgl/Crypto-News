@@ -121,6 +121,11 @@ export function FlowsTab({
           ) : (
             row.exchangeName
           )}
+          {row.coverageBasis && (
+            <span className={`block text-[10px] font-normal ${row.coverageBasis === "verified" ? "text-emerald-700" : "text-ink/50"}`}>
+              {row.coverageBasis === "verified" ? t.basisVerified : t.basisDuneOnly}
+            </span>
+          )}
         </th>
         <td className="py-2 pr-3 text-ink/70">{asset}</td>
         <td className="py-2 pr-3 text-ink/70">{network ? t.networkLabels[network] : "—"}</td>
@@ -138,7 +143,7 @@ export function FlowsTab({
           </>
         ) : (
           <td colSpan={6} className="py-2 text-xs text-ink/50">
-            {row.unavailableReason === "not_tracked" ? t.notTracked : t.notCollected}
+            {row.unavailableReason === "not_tracked" ? t.notTracked : row.unavailableReason === "no_labeled_activity" ? t.noLabeledActivity : t.notCollected}
           </td>
         )}
       </tr>

@@ -89,9 +89,9 @@ function isoDate(daysFromEpoch: number): string {
 // ---- summarizeCoverage: real support count vs the full requested selection ----
 {
   const rows: ExchangeFlowRow[] = [
-    { exchangeId: "a", exchangeName: "A", inflow: 1, outflow: 1, netflow: 0, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverage: "available", updatedAt: null },
-    { exchangeId: "b", exchangeName: "B", inflow: null, outflow: null, netflow: null, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverage: "unavailable", updatedAt: null },
-    { exchangeId: "c", exchangeName: "C", inflow: 2, outflow: 1, netflow: 1, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverage: "available", updatedAt: null },
+    { exchangeId: "a", exchangeName: "A", inflow: 1, outflow: 1, netflow: 0, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverageBasis: null, coverage: "available", updatedAt: null },
+    { exchangeId: "b", exchangeName: "B", inflow: null, outflow: null, netflow: null, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverageBasis: null, coverage: "unavailable", updatedAt: null },
+    { exchangeId: "c", exchangeName: "C", inflow: 2, outflow: 1, netflow: 1, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverageBasis: null, coverage: "available", updatedAt: null },
   ];
   assertEqual(summarizeCoverage(rows), { supportedCount: 2, requestedCount: 3 }, "summarizeCoverage: counts only rows actually marked available, out of the full requested selection — this is what drives 'Data available for N of M selected exchanges'");
 }

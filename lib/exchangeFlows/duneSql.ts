@@ -1,12 +1,20 @@
 // Pure — builds the Dune SQL; no network. Exercised by scripts/verify-exchange-flows.ts.
 
-// Exchanges whose Ethereum wallet labels in Dune's cex.addresses were checked
-// (2026-09: Binance 136, OKX 217, Bybit 45 addresses, none shared between
-// exchanges, newest label added 2025-08 — so coverage is a lower bound).
+// Tracked on Ethereum. Dune label counts (2026-09): Binance 136, OKX 217,
+// Coinbase 241, Kraken 231, Bitstamp 60, KuCoin 58, Bybit 45, Bitget 35,
+// Upbit 24, Gate 12 — no address shared between exchanges. Only exchanges
+// whose published reserve wallets are added (porLabels) count as verified.
 export const DUNE_TRACKED_VENUES = [
   { id: "binance", duneName: "Binance" },
   { id: "okx", duneName: "OKX" },
+  { id: "coinbase", duneName: "Coinbase" },
   { id: "bybit", duneName: "Bybit" },
+  { id: "upbit", duneName: "Upbit" },
+  { id: "kraken", duneName: "Kraken" },
+  { id: "kucoin", duneName: "KuCoin" },
+  { id: "gate", duneName: "Gate.io" },
+  { id: "bitget", duneName: "Bitget" },
+  { id: "bitstamp", duneName: "Bitstamp" },
 ] as const;
 
 // Bitcoin labels in Dune are much thinner (Bybit 4, Coinbase 13 addresses), so

@@ -460,6 +460,9 @@ const en = {
     betweenOut: (v: string) => `out ${v}`,
     notTracked: "Not tracked for this asset yet — wallet coverage for this exchange hasn't been checked.",
     notCollected: "Not enough collected history for this period yet.",
+    noLabeledActivity: "No transfers seen on this exchange's labeled wallets in this period — its labels are likely out of date, so no figure is shown.",
+    basisVerified: "✓ checked against its proof of reserves",
+    basisDuneOnly: "Dune labels only · unverified",
     historyTooShort: (from: string, needed: string) => `Flow history is collected from ${from}; this period needs data from ${needed}.`,
     tableCaption: (asset: string, period: string) => `Exchange ${asset} flows on tracked wallets for ${period}`,
     dailyLoading: "Loading daily flows…",
@@ -470,11 +473,11 @@ const en = {
     methodology: [
       [
         "What is counted",
-        "USDT and USDC on Ethereum (Binance, OKX, Bybit) and BTC on Bitcoin (Binance, OKX) moving into and out of each exchange's known wallets. Net flow = inflow − outflow, in the asset's own units; USDT and USDC are USD-pegged.",
+        "USDT and USDC on Ethereum (all ten exchanges) and BTC on Bitcoin (Binance, OKX) moving into and out of each exchange's known wallets. Net flow = inflow − outflow, in the asset's own units; USDT and USDC are USD-pegged.",
       ],
       [
         "Which wallets",
-        "Dune's exchange address labels (cex.addresses), plus the reserve wallets Binance (audit of 1 Sept 2026) and OKX (snapshot of 11 Aug 2026) publish in their proof of reserves. Checked against those lists, Dune's labels alone covered Binance's BTC 93%, USDT 95%, USDC 57%, and OKX's BTC 54%, USDT 58%, USDC under 1% of the reserve balance; with the published wallets added, those reserve wallets are effectively fully covered. For OKX this mostly moved transfers between its own hot and cold wallets out of inflow/outflow. Bybit publishes its current list only to logged-in users, so it uses Dune's labels alone. Mining-pool wallets and staking validators are left out.",
+        "Dune's exchange address labels (cex.addresses), plus the reserve wallets Binance (audit of 1 Sept 2026) and OKX (snapshot of 11 Aug 2026) publish in their proof of reserves. Checked against those lists, Dune's labels alone covered Binance's BTC 93%, USDT 95%, USDC 57%, and OKX's BTC 54%, USDT 58%, USDC under 1% of the reserve balance; with the published wallets added, those reserve wallets are effectively fully covered. For OKX this mostly moved transfers between its own hot and cold wallets out of inflow/outflow. Every other exchange uses Dune's labels alone and is marked \"unverified\": Coinbase, Upbit and Kraken publish no wallet list to check against, and Bybit shows its current list only to logged-in users. Mining-pool wallets and staking validators are left out.",
       ],
       [
         "Bitcoin",
@@ -490,7 +493,7 @@ const en = {
       ],
       [
         "Partial coverage",
-        "Mainly hot and cold wallets are tracked, not every per-customer deposit address, so a deposit is usually seen when the exchange sweeps it into one of those wallets. For Bybit, Dune's labels were last extended in August 2025, so wallets added since are missing and its figures are a lower bound.",
+        "Mainly hot and cold wallets are tracked, not every per-customer deposit address, so a deposit is usually seen when the exchange sweeps it into one of those wallets. For exchanges marked unverified, Dune's labels were last extended in mid-2025 and their coverage can't be checked, so their figures are a lower bound and may miss large wallets entirely.",
       ],
       [
         "What this is not",

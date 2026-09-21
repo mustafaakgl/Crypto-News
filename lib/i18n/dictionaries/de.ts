@@ -462,6 +462,9 @@ const de = {
     betweenOut: (v: string) => `ab ${v}`,
     notTracked: "Für dieses Asset noch nicht erfasst — die Wallet-Abdeckung dieser Börse wurde noch nicht geprüft.",
     notCollected: "Für diesen Zeitraum liegt noch nicht genug gesammelter Verlauf vor.",
+    noLabeledActivity: "In diesem Zeitraum keine Transfers auf den zugeordneten Wallets dieser Börse — die Zuordnungen sind vermutlich veraltet, daher wird kein Wert angezeigt.",
+    basisVerified: "✓ mit Reservenachweis abgeglichen",
+    basisDuneOnly: "Nur Dune-Zuordnungen · ungeprüft",
     historyTooShort: (from: string, needed: string) => `Der Flussverlauf wird seit ${from} gesammelt; dieser Zeitraum benötigt Daten ab ${needed}.`,
     tableCaption: (asset: string, period: string) => `${asset}-Zu- und -Abflüsse erfasster Börsen-Wallets für ${period}`,
     dailyLoading: "Tägliche Flüsse werden geladen…",
@@ -472,11 +475,11 @@ const de = {
     methodology: [
       [
         "Was gezählt wird",
-        "USDT und USDC auf Ethereum (Binance, OKX, Bybit) sowie BTC auf Bitcoin (Binance, OKX), die in bekannte Wallets der jeweiligen Börse fließen oder sie verlassen. Nettofluss = Zufluss − Abfluss, in Einheiten des jeweiligen Assets; USDT und USDC sind an den USD gekoppelt.",
+        "USDT und USDC auf Ethereum (alle zehn Börsen) sowie BTC auf Bitcoin (Binance, OKX), die in bekannte Wallets der jeweiligen Börse fließen oder sie verlassen. Nettofluss = Zufluss − Abfluss, in Einheiten des jeweiligen Assets; USDT und USDC sind an den USD gekoppelt.",
       ],
       [
         "Welche Wallets",
-        "Dunes Börsen-Adresszuordnungen (cex.addresses), ergänzt um die Reserve-Wallets, die Binance (Prüfung vom 1. Sept. 2026) und OKX (Stand 11. Aug. 2026) in ihren Reservenachweisen veröffentlichen. Gegen diese Listen geprüft deckten Dunes Zuordnungen allein bei Binance 93 % des BTC-, 95 % des USDT- und 57 % des USDC-Bestands ab, bei OKX 54 % des BTC-, 58 % des USDT- und unter 1 % des USDC-Bestands; mit den veröffentlichten Wallets sind diese Reserve-Wallets praktisch vollständig abgedeckt. Bei OKX wurden dadurch vor allem Transfers zwischen eigenen Hot- und Cold-Wallets aus Zu- und Abfluss herausgenommen. Bybit veröffentlicht seine aktuelle Liste nur für angemeldete Nutzer und nutzt daher nur Dunes Zuordnungen. Mining-Pool-Wallets und Staking-Validatoren sind ausgeschlossen.",
+        "Dunes Börsen-Adresszuordnungen (cex.addresses), ergänzt um die Reserve-Wallets, die Binance (Prüfung vom 1. Sept. 2026) und OKX (Stand 11. Aug. 2026) in ihren Reservenachweisen veröffentlichen. Gegen diese Listen geprüft deckten Dunes Zuordnungen allein bei Binance 93 % des BTC-, 95 % des USDT- und 57 % des USDC-Bestands ab, bei OKX 54 % des BTC-, 58 % des USDT- und unter 1 % des USDC-Bestands; mit den veröffentlichten Wallets sind diese Reserve-Wallets praktisch vollständig abgedeckt. Bei OKX wurden dadurch vor allem Transfers zwischen eigenen Hot- und Cold-Wallets aus Zu- und Abfluss herausgenommen. Alle anderen Börsen nutzen nur Dunes Zuordnungen und sind als „ungeprüft“ markiert: Coinbase, Upbit und Kraken veröffentlichen keine Wallet-Liste zum Abgleich, Bybit zeigt seine aktuelle Liste nur angemeldeten Nutzern. Mining-Pool-Wallets und Staking-Validatoren sind ausgeschlossen.",
       ],
       [
         "Bitcoin",
@@ -492,7 +495,7 @@ const de = {
       ],
       [
         "Teilweise Abdeckung",
-        "Erfasst werden vor allem Hot- und Cold-Wallets, nicht jede Einzahlungsadresse einzelner Kunden; eine Einzahlung wird also meist sichtbar, wenn die Börse sie in eine dieser Wallets überführt. Für Bybit wurden Dunes Zuordnungen zuletzt im August 2025 erweitert, seitdem hinzugekommene Wallets fehlen, seine Werte sind daher eine Untergrenze.",
+        "Erfasst werden vor allem Hot- und Cold-Wallets, nicht jede Einzahlungsadresse einzelner Kunden; eine Einzahlung wird also meist sichtbar, wenn die Börse sie in eine dieser Wallets überführt. Für als ungeprüft markierte Börsen wurden Dunes Zuordnungen zuletzt Mitte 2025 erweitert und ihre Abdeckung lässt sich nicht prüfen; ihre Werte sind daher eine Untergrenze und können große Wallets ganz verfehlen.",
       ],
       [
         "Was das nicht ist",
