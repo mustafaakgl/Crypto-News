@@ -12,6 +12,7 @@ export function VolumeComparisonSummary({
   cexVenueCount,
   cexWindow,
   cexAllPairs24hUsd = null,
+  cexAllPairsPeriod = null,
   dex,
   locale = "en",
 }: {
@@ -19,13 +20,14 @@ export function VolumeComparisonSummary({
   cexVenueCount: number;
   cexWindow: string;
   cexAllPairs24hUsd?: number | null;
+  cexAllPairsPeriod?: { usd: number; window: string } | null;
   dex: DexOverviewResult;
   locale?: Locale;
 }) {
   const t = getDictionary(locale).volumeComparisonSummary;
   const dexTotalUsd = dex.totalVolumeUsd;
 
-  const maxUsd = Math.max(cexTotalUsd, cexAllPairs24hUsd ?? 0, dexTotalUsd ?? 0, 1);
+  const maxUsd = Math.max(cexTotalUsd, cexAllPairs24hUsd ?? 0, cexAllPairsPeriod?.usd ?? 0, dexTotalUsd ?? 0, 1);
   const cexBarPct = (cexTotalUsd / maxUsd) * 100;
   const dexBarPct = dexTotalUsd !== null ? (dexTotalUsd / maxUsd) * 100 : 0;
 
@@ -51,6 +53,15 @@ export function VolumeComparisonSummary({
             </td>
             <td className="py-1.5 text-right tabular-nums">{formatMarketCap(cexTotalUsd)}</td>
           </tr>
+          {cexAllPairsPeriod && (
+            <tr className="border-b border-rule/60">
+              <td className="py-1.5">
+                <span className="inline-block w-2.5 h-2.5 bg-accent/50 mr-1.5 align-middle" aria-hidden />
+                {t.cexAllPairsPeriodRow(cexVenueCount, cexAllPairsPeriod.window)}
+              </td>
+              <td className="py-1.5 text-right tabular-nums">{formatMarketCap(cexAllPairsPeriod.usd)}</td>
+            </tr>
+          )}
           {cexAllPairs24hUsd !== null && (
             <tr className="border-b border-rule/60">
               <td className="py-1.5">
@@ -75,6 +86,7 @@ export function VolumeComparisonSummary({
         aria-label={t.ariaLabel(cexVenueCount, formatMarketCap(cexTotalUsd), dexTotalUsd !== null ? formatMarketCap(dexTotalUsd) : "unknown")}
       >
         <div className="h-3 bg-accent" style={{ width: `${Math.max(cexBarPct, 1.5)}%` }} />
+        {cexAllPairsPeriod && <div className="h-3 bg-accent/50" style={{ width: `${Math.max((cexAllPairsPeriod.usd / maxUsd) * 100, 1.5)}%` }} />}
         {cexAllPairs24hUsd !== null && <div className="h-3 bg-accent/50" style={{ width: `${Math.max((cexAllPairs24hUsd / maxUsd) * 100, 1.5)}%` }} />}
         <div className="h-3 bg-ink" style={{ width: `${Math.max(dexBarPct, dexTotalUsd !== null ? 1.5 : 0)}%` }} />
       </div>

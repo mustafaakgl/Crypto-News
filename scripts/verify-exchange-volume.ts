@@ -2,6 +2,7 @@
 // Run with: node scripts/verify-exchange-volume.ts
 import { aggregatePeriod, quoteType, toTrackedPair, DAY_MS } from "../lib/exchangeVolume/aggregate.ts";
 import type { PairHistory, ReferencePrices } from "../lib/exchangeVolume/types.ts";
+import { bucketsFor, sumIntoBuckets } from "../lib/exchangeVolume/grouping.ts";
 import { quoteUsdPrices, rolling24hTotals, type PricedTicker } from "../lib/exchangeVolume/rolling24h.ts";
 
 let failures = 0;
@@ -52,10 +53,10 @@ const pairs: PairHistory[] = [
     quote: "USDT",
     symbol: "BTCUSDT",
     candles: [
-      { startMs: day(3), close: 1, baseVolume: 1 },
-      { startMs: day(2), close: 1, baseVolume: 2 },
-      { startMs: day(1), close: 1, baseVolume: 3 },
-      { startMs: today, close: 1, baseVolume: 50 },
+      { startMs: day(3), close: 1, quoteVolume: 0, baseVolume: 1 },
+      { startMs: day(2), close: 1, quoteVolume: 0, baseVolume: 2 },
+      { startMs: day(1), close: 1, quoteVolume: 0, baseVolume: 3 },
+      { startMs: today, close: 1, quoteVolume: 0, baseVolume: 50 },
     ],
   },
   {
@@ -63,8 +64,8 @@ const pairs: PairHistory[] = [
     quote: "EUR",
     symbol: "BTCEUR",
     candles: [
-      { startMs: day(2), close: 1, baseVolume: 1 },
-      { startMs: day(1), close: 1, baseVolume: 1 },
+      { startMs: day(2), close: 1, quoteVolume: 0, baseVolume: 1 },
+      { startMs: day(1), close: 1, quoteVolume: 0, baseVolume: 1 },
     ],
   },
   {
@@ -72,8 +73,8 @@ const pairs: PairHistory[] = [
     quote: "BTC",
     symbol: "ETHBTC",
     candles: [
-      { startMs: day(3), close: 1, baseVolume: 4 }, // no ETH price that day
-      { startMs: day(1), close: 1, baseVolume: 5 }, // day(2) missing -> a gap
+      { startMs: day(3), close: 1, quoteVolume: 0, baseVolume: 4 }, // no ETH price that day
+      { startMs: day(1), close: 1, quoteVolume: 0, baseVolume: 5 }, // day(2) missing -> a gap
     ],
   },
 ];
@@ -126,6 +127,26 @@ assertEqual([r24.pairsUnvalued, r24.unvaluedQuotes], [1, ["ZZZ"]], "unpriceable 
 assertEqual(Math.round(r24.trackedUsd), 1_000_000 + 1_000_000 + 99_000, "tracked = BTC pairs in USD");
 assertEqual(Math.round(r24.stableSwapUsd), 500_000, "stable↔stable volume broken out");
 assertEqual(Math.round(r24.totalUsd), 1_000_000 + 50_000 + 100_000 + 1_000_000 + 99_000 + 10_000 + 500_000, "total over every priced pair");
+
+// ---- grouping daily series into weeks / months ----
+const d = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
+assertEqual(bucketsFor(d("2026-09-14"), d("2026-09-16"), "day").length, 3, "one bucket per day");
+const weeks = bucketsFor(d("2026-09-09"), d("2026-09-20"), "week"); // Wed .. Sun
+assertEqual(
+  weeks.map((w) => [w.startDay, w.endDay]),
+  [[d("2026-09-07"), d("2026-09-13")], [d("2026-09-14"), d("2026-09-20")]],
+  "weeks run Monday–Sunday, first one reaching back before the range"
+);
+const months = bucketsFor(d("2026-01-30"), d("2026-03-02"), "month");
+assertEqual(months.map((m) => m.calendarDays), [31, 28, 31], "calendar months, February 2026 has 28 days");
+const summed = sumIntoBuckets(weeks, [
+  { day: d("2026-09-09"), value: 1 },
+  { day: d("2026-09-10"), value: 2 },
+  { day: d("2026-09-14"), value: 5 },
+  { day: d("2026-09-20"), value: 7 },
+  { day: d("2026-09-21"), value: 100 }, // after the last bucket
+]);
+assertEqual(summed, [{ value: 3, daysWithData: 2 }, { value: 12, daysWithData: 2 }], "sums per bucket and counts days, ignoring out-of-range points");
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

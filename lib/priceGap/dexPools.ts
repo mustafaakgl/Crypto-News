@@ -72,7 +72,7 @@ export async function fetchPoolCandles(pool: DexPool, resolution: CandleResoluti
     const startMs = Number(r[0]) * 1000;
     const close = Number(r[4]);
     // r[5] is USD volume, not base volume, and isn't needed for price gaps.
-    if (isFinite(startMs) && isFinite(close) && close > 0) candles.push({ startMs, close, baseVolume: 0 });
+    if (isFinite(startMs) && isFinite(close) && close > 0) candles.push({ startMs, close, baseVolume: 0, quoteVolume: 0 });
   }
   return { pair: `${base}/USDT`, candles: candles.sort((a, b) => a.startMs - b.startMs) };
 }

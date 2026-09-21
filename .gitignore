@@ -11,3 +11,6 @@ next-env.d.ts
 # Licensed source material (PDF, extracted text, retrieval index) for the
 # Price Action RAG feature — never committed, never served publicly.
 data/knowledge/
+
+# Collected market history (SQLite) — server-local data, never committed.
+data/market/

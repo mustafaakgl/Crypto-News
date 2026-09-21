@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import type { ExchangePeriod } from "@/lib/exchangeAnalytics/types";
-import type { BaseAsset, FiatCurrency, QuoteType, VenueRolling24h, VenueVolumeResult } from "@/lib/exchangeVolume/types";
+import type { BaseAsset, FiatCurrency, QuoteType, StoredVenueTotals, VenueRolling24h, VenueVolumeResult } from "@/lib/exchangeVolume/types";
 import { formatMarketCap, formatPct, formatQuantity } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/locale";
 import { getDictionary } from "@/lib/i18n/getDictionary";
@@ -13,6 +13,7 @@ export type VenueRowState = {
   state: "loading" | "ready" | "error";
   data: VenueVolumeResult | null;
   rolling24h: VenueRolling24h | null;
+  storedTotals: StoredVenueTotals | null;
   stale: boolean;
 };
 
@@ -45,7 +46,11 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
 
   const ready = rows.filter((r) => r.state === "ready" && r.data?.periods);
   const pending = rows.filter((r) => !(r.state === "ready" && r.data?.periods));
-  const sortKey = (r: VenueRowState) => (view === "allPairs" ? (r.rolling24h?.totalUsd ?? -1) : r.data!.periods![period].totalUsd);
+  const allPairsKey = (r: VenueRowState) => {
+    const s = r.storedTotals?.periods[period];
+    return s?.complete ? s.totalUsd : (r.rolling24h?.totalUsd ?? -1);
+  };
+  const sortKey = (r: VenueRowState) => (view === "allPairs" ? allPairsKey(r) : r.data!.periods![period].totalUsd);
   const sorted = [...ready].sort((a, b) => sortKey(b) - sortKey(a));
   const perDay = (r: VenueRowState, p: ExchangePeriod) => r.data!.periods![p].totalUsd / r.data!.periods![p].days;
 
@@ -53,7 +58,7 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
   const allReady = pending.length === 0 && ready.length > 0;
 
   const headers: string[] = {
-    allPairs: [t.colAllPairs24h, t.colTracked24h, t.colTrackedShare, t.colStableSwap24h, t.colPairsCounted],
+    allPairs: [t.colAllPairsPeriod(periodLabels[period]), t.colTrackedShare, t.colAllPairs24h, t.colStableSwap24h, t.colPairsCounted],
     quoteType: [t.colTotal, t.quoteTypeLabels.fiat, t.quoteTypeLabels.stablecoin, t.quoteTypeLabels.crypto, t.colMix],
     base: [t.colTotal, ...BASES],
     fiat: [t.colFiatTotal, ...FIATS],
@@ -66,27 +71,28 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
     const qt = (k: QuoteType) => (r ? p!.byQuoteType[k] : sum((x) => x.data!.periods![period].byQuoteType[k]));
     switch (view) {
       case "allPairs": {
-        const rs = r ? (r.rolling24h ? [r.rolling24h] : []) : ready.flatMap((x) => (x.rolling24h ? [x.rolling24h] : []));
-        if (rs.length === 0) {
-          return (
-            <td colSpan={headers.length} className="py-2 text-xs text-ink/50">
-              {t.rollingUnavailable}
-            </td>
-          );
-        }
-        const all = rs.reduce((a, x) => a + x.totalUsd, 0);
-        const tracked = rs.reduce((a, x) => a + x.trackedUsd, 0);
-        const stable = rs.reduce((a, x) => a + x.stableSwapUsd, 0);
+        const venues = r ? [r] : ready;
+        const stored = venues.map((x) => x.storedTotals?.periods[period] ?? null);
+        const storedComplete = stored.every((s) => s?.complete);
+        const storedAll = storedComplete ? stored.reduce((a, s) => a + s!.totalUsd, 0) : null;
+        const storedTracked = storedComplete ? stored.reduce((a, s) => a + s!.trackedUsd, 0) : null;
+        const rs = venues.flatMap((x) => (x.rolling24h ? [x.rolling24h] : []));
+        const rsComplete = rs.length === venues.length;
+        const all24 = rsComplete ? rs.reduce((a, x) => a + x.totalUsd, 0) : null;
+        const stable24 = rsComplete ? rs.reduce((a, x) => a + x.stableSwapUsd, 0) : null;
+        const own = r ? stored[0] : null;
         return (
           <>
-            <Num>{usd(all)}</Num>
-            <Num>{usd(tracked)}</Num>
-            <Num>{all > 0 ? `${((tracked / all) * 100).toFixed(1)}%` : "—"}</Num>
             <Num>
-              {usd(stable)}
-              <Share part={stable} whole={all} />
+              {storedAll !== null ? usd(storedAll) : own ? <span className="text-[11px] text-ink/50">{t.collectingDays(own.daysCovered, own.days)}</span> : "—"}
             </Num>
-            <Num>{rs.reduce((a, x) => a + x.pairsCounted, 0).toLocaleString(locale === "de" ? "de-DE" : "en-GB")}</Num>
+            <Num>{storedAll && storedTracked !== null ? `${((storedTracked / storedAll) * 100).toFixed(1)}%` : "—"}</Num>
+            <Num>{all24 !== null ? usd(all24) : r ? <span className="text-[11px] text-ink/50">{t.rollingUnavailable}</span> : "—"}</Num>
+            <Num>
+              {stable24 !== null ? usd(stable24) : "—"}
+              {stable24 !== null && all24 !== null && <Share part={stable24} whole={all24} />}
+            </Num>
+            <Num>{rsComplete ? rs.reduce((a, x) => a + x.pairsCounted, 0).toLocaleString(locale === "de" ? "de-DE" : "en-GB") : "—"}</Num>
           </>
         );
       }
@@ -153,6 +159,15 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
   }
 
   const win = ready[0]?.data?.periods?.[period];
+  const withStored = ready.filter((r) => r.storedTotals);
+  // The range every loaded venue has in common, so the note never overstates coverage.
+  const collected =
+    withStored.length > 0
+      ? {
+          from: withStored.map((r) => r.storedTotals!.collectedFrom).sort().at(-1)!,
+          through: withStored.map((r) => r.storedTotals!.collectedThrough).sort()[0],
+        }
+      : null;
   const notes = ready.flatMap((r) => {
     const d = r.data!;
     const p = d.periods![view === "trend" ? "1y" : period];
@@ -196,6 +211,11 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
       )}
       {view === "trend" && <p className="text-xs text-ink/50 mb-2">{t.trendNote}</p>}
       {view === "allPairs" && <p className="text-xs text-ink/50 mb-2">{t.allPairsNote}</p>}
+      {view === "allPairs" && ready.length > 0 && (
+        <p className="text-[11px] text-ink/40 mb-2">
+          {collected ? t.collectedRange(collected.from, collected.through) : t.collectionOff}
+        </p>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">

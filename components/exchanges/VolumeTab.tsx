@@ -2,11 +2,13 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { DexOverviewResult, ExchangePeriod, VenueCount } from "@/lib/exchangeAnalytics/types";
-import type { VenueRolling24h, VenueVolumeResult } from "@/lib/exchangeVolume/types";
+import type { StoredVenueTotals, VenueRolling24h, VenueVolumeResult } from "@/lib/exchangeVolume/types";
 import { CEX_VENUES } from "@/lib/exchangeVolume/venues";
 import { CexVolumeTable, type VenueRowState } from "@/components/exchanges/CexVolumeTable";
 import { DexTable } from "@/components/exchanges/DexTable";
 import { VolumeComparisonSummary } from "@/components/exchanges/VolumeComparisonSummary";
+import { VolumeHistoryChart } from "@/components/exchanges/VolumeHistoryChart";
+import { PERIOD_DAYS } from "@/lib/exchangeVolume/aggregate";
 import { dateTime } from "@/lib/time";
 import type { Locale } from "@/lib/i18n/locale";
 import { getDictionary } from "@/lib/i18n/getDictionary";
@@ -28,16 +30,16 @@ function useVenueVolumes(count: VenueCount): VenueRowState[] {
       controller.abort();
     }, CLIENT_TIMEOUT_MS);
     for (const v of CEX_VENUES.slice(0, count)) {
-      setRows((cur) => (cur[v.id]?.state === "ready" ? cur : { ...cur, [v.id]: { id: v.id, name: v.name, state: "loading", data: null, rolling24h: null, stale: false } }));
+      setRows((cur) => (cur[v.id]?.state === "ready" ? cur : { ...cur, [v.id]: { id: v.id, name: v.name, state: "loading", data: null, rolling24h: null, storedTotals: null, stale: false } }));
       fetch(`/api/exchanges/volume?venue=${v.id}`, { signal: controller.signal })
         .then((res) => res.json())
-        .then((json: VenueVolumeResult & { stale?: boolean; rolling24h?: VenueRolling24h | null }) => {
+        .then((json: VenueVolumeResult & { stale?: boolean; rolling24h?: VenueRolling24h | null; storedTotals?: StoredVenueTotals | null }) => {
           const ok = json.status !== "error" && json.periods !== null;
-          setRows((cur) => ({ ...cur, [v.id]: { id: v.id, name: v.name, state: ok ? "ready" : "error", data: json, rolling24h: json.rolling24h ?? null, stale: json.stale ?? false } }));
+          setRows((cur) => ({ ...cur, [v.id]: { id: v.id, name: v.name, state: ok ? "ready" : "error", data: json, rolling24h: json.rolling24h ?? null, storedTotals: json.storedTotals ?? null, stale: json.stale ?? false } }));
         })
         .catch(() => {
           if (controller.signal.aborted && !timedOut) return;
-          setRows((cur) => ({ ...cur, [v.id]: { id: v.id, name: v.name, state: "error", data: null, rolling24h: null, stale: false } }));
+          setRows((cur) => ({ ...cur, [v.id]: { id: v.id, name: v.name, state: "error", data: null, rolling24h: null, storedTotals: null, stale: false } }));
         });
     }
     return () => {
@@ -46,7 +48,7 @@ function useVenueVolumes(count: VenueCount): VenueRowState[] {
     };
   }, [count]);
 
-  return venues.map((v) => rows[v.id] ?? { id: v.id, name: v.name, state: "loading", data: null, rolling24h: null, stale: false });
+  return venues.map((v) => rows[v.id] ?? { id: v.id, name: v.name, state: "loading", data: null, rolling24h: null, storedTotals: null, stale: false });
 }
 
 type DexLoadable = { state: "loading" | "ready" | "error"; data: DexOverviewResult | null; stale: boolean; error: string | null };
@@ -89,6 +91,11 @@ export function VolumeTab({ period, count, locale = "en" }: { period: ExchangePe
   const cexTotalUsd = cexReady.reduce((s, r) => s + r.data!.periods![period].totalUsd, 0);
   const cexWindow = cexReady[0]?.data?.periods?.[period];
   // Only when every loaded venue has it — a partial sum would understate the CEX side.
+  const storedPeriods = cexReady.map((r) => r.storedTotals?.periods[period]);
+  const cexAllPairsPeriod =
+    cexReady.length > 0 && storedPeriods.every((s) => s?.complete)
+      ? { usd: storedPeriods.reduce((a, s) => a + s!.totalUsd, 0), window: `${storedPeriods[0]!.startDay} – ${storedPeriods[0]!.endDay}` }
+      : null;
   const cexAllPairs24hUsd =
     period === "1d" && cexReady.length > 0 && cexReady.every((r) => r.rolling24h) ? cexReady.reduce((s, r) => s + r.rolling24h!.totalUsd, 0) : null;
 
@@ -106,13 +113,20 @@ export function VolumeTab({ period, count, locale = "en" }: { period: ExchangePe
         </section>
 
         <section>
+          <h2 className="font-serif text-xl font-700 mb-1">{dict.volumeHistory.heading}</h2>
+          <p className="text-xs text-ink/50 mb-3">{dict.volumeHistory.rangeNote(period === "1d" ? 30 : PERIOD_DAYS[period])}</p>
+          <VolumeHistoryChart period={period} count={count} locale={locale} />
+        </section>
+
+        <section>
           <h2 className="font-serif text-xl font-700 mb-2">{t.comparisonHeading(periodLabel)}</h2>
           {cexSettled && cexReady.length > 0 && dex.state === "ready" && dex.data ? (
             <VolumeComparisonSummary
               cexTotalUsd={cexTotalUsd}
               cexVenueCount={cexReady.length}
               cexWindow={cexWindow ? `${cexWindow.startDay} – ${cexWindow.endDay}` : ""}
-              cexAllPairs24hUsd={cexAllPairs24hUsd}
+              cexAllPairs24hUsd={cexAllPairsPeriod ? null : cexAllPairs24hUsd}
+              cexAllPairsPeriod={cexAllPairsPeriod}
               dex={dex.data}
               locale={locale}
             />
@@ -160,6 +174,9 @@ export function VolumeTab({ period, count, locale = "en" }: { period: ExchangePe
               </p>
               <p>
                 <strong>{t.labelAllPairs}</strong> — {t.methodologyAllPairs}
+              </p>
+              <p>
+                <strong>{t.labelHistory}</strong> — {t.methodologyHistory}
               </p>
               <p>
                 <strong>{t.labelVenueSelection}</strong> — {t.methodologyVenueSelection}

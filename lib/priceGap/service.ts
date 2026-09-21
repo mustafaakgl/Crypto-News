@@ -7,6 +7,8 @@ import { DEX_POOLS, fetchPoolCandles, poolUrl } from "@/lib/priceGap/dexPools";
 import { completedBuckets, deviationSeries, gapStats, referenceSeries } from "@/lib/priceGap/gapMath";
 import type { GapAsset, MarketKind, PriceGapResult, VenueGap } from "@/lib/priceGap/types";
 import { TtlCache, type StaleAwareResult } from "@/lib/rag/cache";
+import { storedDexCandles } from "@/lib/collector/dexCandles";
+import { hasDb } from "@/lib/store/db";
 
 const PERIOD_SPEC: Record<ExchangePeriod, { resolution: CandleResolution; buckets: number }> = {
   "1d": { resolution: "1h", buckets: 24 },
@@ -54,7 +56,15 @@ async function fetchCex(asset: GapAsset, resolution: CandleResolution, sinceMs: 
   );
 }
 
-async function fetchDex(asset: GapAsset, resolution: CandleResolution): Promise<SourceSeries[]> {
+// GeckoTerminal's free API only goes back ~6 months; anything older comes from what the collector has stored.
+function withStoredHistory(asset: GapAsset, poolId: string, resolution: CandleResolution, live: Candle[], sinceMs: number): Candle[] {
+  if (!hasDb()) return live;
+  const earliestLive = live.length ? live[0].startMs : Infinity;
+  const older = storedDexCandles(asset, poolId, resolution, sinceMs).filter((c) => c.startMs < earliestLive);
+  return older.length ? [...older, ...live] : live;
+}
+
+async function fetchDex(asset: GapAsset, resolution: CandleResolution, sinceMs: number): Promise<SourceSeries[]> {
   return Promise.all(
     DEX_POOLS[asset].map(async (pool): Promise<SourceSeries> => {
       const base = {
@@ -67,7 +77,7 @@ async function fetchDex(asset: GapAsset, resolution: CandleResolution): Promise<
       };
       try {
         const { pair, candles } = await fetchPoolCandles(pool, resolution);
-        return { ...base, pair, candles, error: null };
+        return { ...base, pair, candles: withStoredHistory(asset, pool.id, resolution, candles, sinceMs), error: null };
       } catch (err) {
         return { ...base, pair: `${pool.assetSymbols[0]}/USDT`, candles: null, error: errMsg(err) };
       }
@@ -78,7 +88,7 @@ async function fetchDex(asset: GapAsset, resolution: CandleResolution): Promise<
 async function computeSeries(asset: GapAsset, resolution: CandleResolution): Promise<SeriesBundle> {
   const nowMs = Date.now();
   const sinceMs = Math.floor(nowMs / RESOLUTION_MS[resolution]) * RESOLUTION_MS[resolution] - HISTORY_BUCKETS[resolution] * RESOLUTION_MS[resolution];
-  const [cex, dex] = await Promise.all([fetchCex(asset, resolution, sinceMs, nowMs), fetchDex(asset, resolution)]);
+  const [cex, dex] = await Promise.all([fetchCex(asset, resolution, sinceMs, nowMs), fetchDex(asset, resolution, sinceMs)]);
   return { sources: [...dex, ...cex], fetchedAt: nowMs };
 }
 

@@ -10,6 +10,8 @@ export type RawTicker = { symbol: string; last: number; quoteVolume: number };
 
 export type VenueAdapter = {
   pace: PacedOptions;
+  // Overrides Next's fetch-cache lifetime for candles (0 = don't cache), e.g. for bulk collection.
+  candleRevalidate?: number;
   // Every spot instrument, with asset codes normalized (uppercase, Kraken's XBT → BTC).
   listInstruments(): Promise<Instrument[]>;
   // Rolling-24h snapshot of every spot pair in one call; quoteVolume is in the pair's quote currency.
@@ -64,13 +66,20 @@ function pairsFrom<T>(items: T[], pick: (item: T) => { base: string; quote: stri
   return out;
 }
 
-// Row arrays of [timestamp, ...] where the timestamp unit and the close /
-// base-volume columns differ per exchange.
-function candlesFromRows(rows: unknown[], tsUnit: "ms" | "s", closeIndex: number, volIndex: number): Candle[] {
+// Row arrays of [timestamp, ...]; quoteVolIndex null means the API has no
+// quote volume and it's approximated as base volume × close.
+function candlesFromRows(rows: unknown[], tsUnit: "ms" | "s", closeIndex: number, volIndex: number, quoteVolIndex: number | null): Candle[] {
   return rows.map((r) => {
     const row = arr(r);
-    return { startMs: num(row[0]) * (tsUnit === "s" ? 1000 : 1), close: num(row[closeIndex]), baseVolume: num(row[volIndex]) };
+    const close = num(row[closeIndex]);
+    const baseVolume = num(row[volIndex]);
+    const quoteVolume = quoteVolIndex === null ? baseVolume * close : num(row[quoteVolIndex]);
+    return { startMs: num(row[0]) * (tsUnit === "s" ? 1000 : 1), close, baseVolume, quoteVolume };
   });
+}
+
+function candleRevalidate(adapter: VenueAdapter, resolution: CandleResolution): number {
+  return adapter.candleRevalidate ?? CANDLE_REVALIDATE[resolution];
 }
 
 function dedupe(candles: Candle[]): Candle[] {
@@ -136,7 +145,7 @@ const binance: VenueAdapter = {
   },
   async fetchCandles(symbol, resolution, sinceMs) {
     const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${resolution}&startTime=${sinceMs}&limit=1000`;
-    return dedupe(candlesFromRows(arr(await getJson(url, `Binance klines ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)), "ms", 4, 5));
+    return dedupe(candlesFromRows(arr(await getJson(url, `Binance klines ${symbol}`, candleRevalidate(this, resolution), this.pace)), "ms", 4, 5, 7));
   },
 };
 
@@ -162,7 +171,7 @@ const okx: VenueAdapter = {
     const bar = resolution === "1h" ? "1H" : "1Dutc";
     return pageBackward(100, sinceMs, nowMs, resolution, async (cursor) => {
       const url = `https://www.okx.com/api/v5/market/history-candles?instId=${symbol}&bar=${bar}&limit=100${cursor ? `&after=${cursor}` : ""}`;
-      return candlesFromRows(arr(rec(await getJson(url, `OKX candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)).data), "ms", 4, 5);
+      return candlesFromRows(arr(rec(await getJson(url, `OKX candles ${symbol}`, candleRevalidate(this, resolution), this.pace)).data), "ms", 4, 5, 7);
     });
   },
 };
@@ -191,7 +200,7 @@ const coinbase: VenueAdapter = {
     for (let start = sinceMs; start <= nowMs; start += 300 * step) {
       const end = Math.min(start + 299 * step, nowMs);
       const url = `https://api.exchange.coinbase.com/products/${symbol}/candles?granularity=${step / 1000}&start=${new Date(start).toISOString()}&end=${new Date(end).toISOString()}`;
-      out.push(...candlesFromRows(arr(await getJson(url, `Coinbase candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)), "s", 4, 5));
+      out.push(...candlesFromRows(arr(await getJson(url, `Coinbase candles ${symbol}`, candleRevalidate(this, resolution), this.pace)), "s", 4, 5, null));
     }
     return dedupe(out);
   },
@@ -215,8 +224,8 @@ const bybit: VenueAdapter = {
   },
   async fetchCandles(symbol, resolution, sinceMs) {
     const url = `https://api.bybit.com/v5/market/kline?category=spot&symbol=${symbol}&interval=${resolution === "1h" ? "60" : "D"}&start=${sinceMs}&limit=1000`;
-    const data = rec(await getJson(url, `Bybit klines ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
-    return dedupe(candlesFromRows(arr(rec(data.result).list), "ms", 4, 5));
+    const data = rec(await getJson(url, `Bybit klines ${symbol}`, candleRevalidate(this, resolution), this.pace));
+    return dedupe(candlesFromRows(arr(rec(data.result).list), "ms", 4, 5, 6));
   },
 };
 
@@ -243,12 +252,12 @@ const upbit: VenueAdapter = {
     const path = resolution === "1h" ? "candles/minutes/60" : "candles/days";
     return pageBackward(200, sinceMs, nowMs, resolution, async (cursor) => {
       const to = cursor ? `&to=${encodeURIComponent(new Date(cursor).toISOString().replace(".000Z", "Z"))}` : "";
-      const rows = arr(await getJson(`https://api.upbit.com/v1/${path}?market=${symbol}&count=200${to}`, `Upbit candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
+      const rows = arr(await getJson(`https://api.upbit.com/v1/${path}?market=${symbol}&count=200${to}`, `Upbit candles ${symbol}`, candleRevalidate(this, resolution), this.pace));
       return rows.map((r) => {
         const o = rec(r);
         const start = Date.parse(`${String(o.candle_date_time_utc)}Z`);
         if (!isFinite(start)) throw new AdapterError("bad Upbit candle date");
-        return { startMs: start, close: num(o.trade_price), baseVolume: num(o.candle_acc_trade_volume) };
+        return { startMs: start, close: num(o.trade_price), baseVolume: num(o.candle_acc_trade_volume), quoteVolume: num(o.candle_acc_trade_price) };
       });
     });
   },
@@ -280,12 +289,21 @@ const kraken: VenueAdapter = {
   async fetchCandles(symbol, resolution, sinceMs) {
     const interval = resolution === "1h" ? 60 : 1440;
     const url = `https://api.kraken.com/0/public/OHLC?pair=${symbol}&interval=${interval}&since=${sec(sinceMs) - 1}`;
-    const data = rec(await getJson(url, `Kraken OHLC ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
+    const data = rec(await getJson(url, `Kraken OHLC ${symbol}`, candleRevalidate(this, resolution), this.pace));
     if (Array.isArray(data.error) && data.error.length > 0) throw new AdapterError(`Kraken OHLC ${symbol}: ${data.error.join(", ")}`);
     const result = rec(data.result);
     const key = Object.keys(result).find((k) => k !== "last");
     if (!key) return [];
-    return dedupe(candlesFromRows(arr(result[key]), "s", 4, 6));
+    // Kraken has no quote volume; its per-candle VWAP (index 5) is a better multiplier than the close.
+    return dedupe(
+      arr(result[key]).map((r) => {
+        const row = arr(r);
+        const close = num(row[4]);
+        const baseVolume = num(row[6]);
+        const vwap = Number(row[5]);
+        return { startMs: num(row[0]) * 1000, close, baseVolume, quoteVolume: baseVolume * (vwap > 0 ? vwap : close) };
+      })
+    );
   },
 };
 
@@ -307,7 +325,7 @@ const kucoin: VenueAdapter = {
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
     const url = `https://api.kucoin.com/api/v1/market/candles?type=${resolution === "1h" ? "1hour" : "1day"}&symbol=${symbol}&startAt=${sec(sinceMs)}&endAt=${sec(nowMs)}`;
-    return dedupe(candlesFromRows(arr(rec(await getJson(url, `KuCoin candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)).data), "s", 2, 5));
+    return dedupe(candlesFromRows(arr(rec(await getJson(url, `KuCoin candles ${symbol}`, candleRevalidate(this, resolution), this.pace)).data), "s", 2, 5, 6));
   },
 };
 
@@ -329,7 +347,7 @@ const gate: VenueAdapter = {
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
     const url = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${symbol}&interval=${resolution}&from=${sec(sinceMs)}&to=${sec(nowMs)}`;
-    return dedupe(candlesFromRows(arr(await getJson(url, `Gate candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)), "s", 2, 6));
+    return dedupe(candlesFromRows(arr(await getJson(url, `Gate candles ${symbol}`, candleRevalidate(this, resolution), this.pace)), "s", 2, 6, 1));
   },
 };
 
@@ -358,7 +376,7 @@ const bitget: VenueAdapter = {
     const granularity = resolution === "1h" ? "1h" : "1Dutc";
     return pageBackward(200, sinceMs, nowMs, resolution, async (cursor) => {
       const url = `https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${symbol}&granularity=${granularity}&endTime=${cursor ?? nowMs}&limit=200`;
-      return candlesFromRows(arr(rec(await getJson(url, `Bitget candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)).data), "ms", 4, 5);
+      return candlesFromRows(arr(rec(await getJson(url, `Bitget candles ${symbol}`, candleRevalidate(this, resolution), this.pace)).data), "ms", 4, 5, 7);
     });
   },
 };
@@ -384,11 +402,11 @@ const bitstamp: VenueAdapter = {
   },
   async fetchCandles(symbol, resolution, sinceMs) {
     const url = `https://www.bitstamp.net/api/v2/ohlc/${symbol}/?step=${RESOLUTION_MS[resolution] / 1000}&limit=1000&start=${sec(sinceMs)}`;
-    const data = rec(await getJson(url, `Bitstamp OHLC ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
+    const data = rec(await getJson(url, `Bitstamp OHLC ${symbol}`, candleRevalidate(this, resolution), this.pace));
     return dedupe(
       arr(rec(data.data).ohlc).map((r) => {
         const o = rec(r);
-        return { startMs: num(o.timestamp) * 1000, close: num(o.close), baseVolume: num(o.volume) };
+        return { startMs: num(o.timestamp) * 1000, close: num(o.close), baseVolume: num(o.volume), quoteVolume: num(o.volume) * num(o.close) };
       })
     );
   },

@@ -10,7 +10,7 @@ export type PairRef = { base: BaseAsset; quote: QuoteCurrency; symbol: string };
 export type CandleResolution = "1h" | "1d";
 
 // startMs is the UTC start of the bucket (00:00 UTC for daily candles).
-export type Candle = { startMs: number; close: number; baseVolume: number };
+export type Candle = { startMs: number; close: number; baseVolume: number; quoteVolume: number };
 
 export type PairHistory = PairRef & { candles: Candle[] };
 
@@ -54,3 +54,23 @@ export type VenueRolling24h = {
   unvaluedQuotes: string[];
   asOf: string;
 };
+
+export type StoredPeriodTotals = {
+  totalUsd: number;
+  trackedUsd: number;
+  stableSwapUsd: number;
+  days: number;
+  daysCovered: number;
+  complete: boolean;
+  startDay: string;
+  endDay: string;
+};
+
+export type StoredVenueTotals = {
+  periods: Record<ExchangePeriod, StoredPeriodTotals>;
+  collectedFrom: string;
+  collectedThrough: string;
+  pairsListed: number;
+};
+
+export type StoredDailyPoint = { day: number; totalUsd: number; trackedUsd: number }; // day = days since 1970-01-01 UTC
