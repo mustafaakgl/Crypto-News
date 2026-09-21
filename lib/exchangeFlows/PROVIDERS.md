@@ -36,8 +36,19 @@ encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).
   7-day inflow went from $690M to $3.66B and USDT's net from +$273M to +$555M.
   The label version is part of the collector's source key, so a new audit
   file triggers a fresh backfill.
-- Bitcoin (Binance only): UTXO rules per transaction in `bitcoinFlowsSql`;
-  30-day backfill cost 1.24 credits. Dune's Bitcoin labels for other
+- OKX's reserve addresses are added the same way, from its proof of reserves
+  (snapshot 2026-08-11, `por_csv_2026081100_V6.zip`; 212k addresses incl.
+  deposit addresses, so only the non-staking addresses holding 99.9% of each
+  balance are kept in [`porLabels/okx-20260811.json`](./porLabels/okx-20260811.json):
+  1,298 BTC and 105 Ethereum addresses). Dune's labels alone covered 53.6% of
+  OKX's BTC, 57.7% of its USDT and 0.9% of its USDC reserve balance. Adding
+  them moved OKX's own hot ↔ cold transfers out of in/out: USDT 7-day inflow
+  went from $1.38B to $1.14B and net from −$16M to +$39M.
+- Bybit's current wallet list is only downloadable after logging in (the
+  only public file is from 2022-12), so Bybit uses Dune's labels alone.
+- Bitcoin (Binance, OKX): UTXO rules per transaction in `bitcoinFlowsSql`;
+  7-day query ~0.5 credits per exchange. Cost varies by Dune load: one 7-day
+  Ethereum run cost 12.6 credits where the same query had cost 0.5–1.2. Dune's Bitcoin labels for other
   exchanges are too thin to use (Bybit 4, Coinbase 13 addresses).
 - Mining-pool labels ("Binance Pool …") are excluded: payouts to miners
   aren't exchange withdrawals.

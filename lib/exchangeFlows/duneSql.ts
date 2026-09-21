@@ -10,9 +10,11 @@ export const DUNE_TRACKED_VENUES = [
 ] as const;
 
 // Bitcoin labels in Dune are much thinner (Bybit 4, Coinbase 13 addresses), so
-// only exchanges whose reserve wallets were checked against a published
-// proof-of-reserves list are tracked there.
-export const DUNE_BITCOIN_VENUES = [{ id: "binance", duneName: "Binance" }] as const;
+// only exchanges whose published proof-of-reserves wallets are added are tracked there.
+export const DUNE_BITCOIN_VENUES = [
+  { id: "binance", duneName: "Binance" },
+  { id: "okx", duneName: "OKX" },
+] as const;
 
 export const DUNE_TOKENS = [
   { asset: "USDT", contract: "0xdac17f958d2ee523a2206206994597c13d831ec7" },

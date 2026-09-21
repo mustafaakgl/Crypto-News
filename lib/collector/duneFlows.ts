@@ -29,7 +29,8 @@ const SOURCES: Record<FlowsNetwork, FlowSource> = {
     network: "bitcoin",
     venues: DUNE_BITCOIN_VENUES,
     assets: ["BTC"],
-    queries: (from, to) => DUNE_BITCOIN_VENUES.map((v) => bitcoinFlowsSql(v.duneName, from, to, v.id === "binance" ? BITCOIN_EXTRA_LABELS : [])),
+    // Every venue's query gets all published wallets, so transfers between tracked exchanges are recognised.
+    queries: (from, to) => DUNE_BITCOIN_VENUES.map((v) => bitcoinFlowsSql(v.duneName, from, to, BITCOIN_EXTRA_LABELS)),
   },
 };
 
