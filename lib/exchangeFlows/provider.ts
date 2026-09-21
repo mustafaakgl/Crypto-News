@@ -7,7 +7,7 @@ export type FlowsOverviewParams = {
   network: FlowNetwork;
   period: ExchangePeriod;
   // Candidate venues to look up, in the SAME order/selection as the Volume
-  // tab (see cexVenues.ts) — a provider fills in what it can and reports
+  // tab (see lib/exchangeVolume/venues.ts) — a provider fills in what it can and reports
   // the rest as unavailable; it never substitutes a different exchange.
   candidates: { id: string; name: string }[];
 };

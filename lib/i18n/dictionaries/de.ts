@@ -354,77 +354,67 @@ const de = {
     waitingOnData: (side: string) =>
       `Warte auf ${side}-Daten, bevor ein Vergleich angezeigt wird — ein Vergleich mit nur einer fertigen Seite würde die andere fälschlich als null darstellen.`,
     centralizedExchanges: "Zentralisierte Börsen (CEX)",
-    loadingShort: (seconds: number) => `Lädt… (${seconds}s vergangen)`,
-    loadingLong: (count: number, estimate: string, seconds: number) =>
-      `Historische Daten für ${count} Börsen werden von CoinGeckos öffentlicher API geladen, gedrosselt gemäß dessen Free-Tier-Ratenlimit — bei einem Kaltstart typischerweise ${estimate}s, schneller, wenn diese Auswahl kürzlich schon abgerufen wurde. ${seconds}s vergangen.`,
-    rankedTrailing24h: (poolSize: number) =>
-      `Sortiert nach gleitendem 24-Std.-Spot-Volumen laut CoinGecko, aus einem Pool der ${poolSize} von CoinGecko nach eigenem Trust Score bewerteten Börsen — nicht notwendigerweise jede existierende Börse.`,
-    rankedOtherPeriods: (poolSize: number, period: string) =>
-      `Auswahl nach dem HEUTIGEN 24-Std.-Volumen aus einem Pool der ${poolSize} von CoinGecko bewerteten Börsen. Was der Zeitstempel eines Tagespunkts im volume_chart-Endpunkt von CoinGecko genau markiert, ist nicht dokumentiert und konnte nicht abschließend verifiziert werden (siehe Methodik) — daher bildet ${period} keine Summe über einen Zeitraum. Jede Zeile zeigt stattdessen den jüngsten, nachweislich vollständigen Tag dieser Börse.`,
-    windowFetched: (start: string, end: string, fetched: string) => `Zeitfenster: ${start} – ${end} (Europe/Berlin) · abgerufen ${fetched}`,
-    refreshingInBackground: " · wird im Hintergrund aktualisiert…",
-    loadedIn: (seconds: string) => ` · geladen in ${seconds}s`,
+    cexIntro: (n: number) =>
+      `Spot-Volumen von ${n} großen Börsen in ihren Hauptpaaren: BTC, ETH, SOL und XRP gegen Fiat (USD, EUR, GBP, KRW, TRY), Stablecoins (USDT, USDC) oder BTC. Das ist nicht das Gesamtvolumen jeder Börse über alle gelisteten Paare.`,
+    ariaSelectView: "Aufschlüsselung wählen",
+    viewLabels: { quoteType: "Nach Währungstyp", base: "Nach Asset", fiat: "Nach Fiat-Währung", trend: "Im Zeitverlauf" },
+    quoteTypeLabels: { fiat: "Fiat", stablecoin: "Stablecoin", crypto: "In BTC notiert" },
+    quoteTypeLegend: { fiat: "Fiat (USD, EUR, GBP, KRW, TRY)", stablecoin: "Stablecoin (USDT, USDC)", crypto: "In BTC notiert (ETH/BTC, …)" },
+    colExchange: "Börse",
+    colTotal: "Erfasstes Volumen",
+    colFiatTotal: "Fiat gesamt",
+    colMix: "Mix",
+    colPerDay: (period: string) => `${period} Ø/Tag`,
+    colVs1y: "1T vs. 1J-Ø",
+    trendNote:
+      "Durchschnittliches Tagesvolumen je Zeitraum, damit unterschiedlich lange Zeitfenster direkt vergleichbar sind. Unabhängig von der Zeitraumauswahl oben.",
+    totalRow: (n: number) => `Alle ${n} Börsen`,
+    totalRowPartial: (n: number, of: number) => `${n} von ${of} Börsen geladen`,
+    venueLoading: "Tagesverlauf wird geladen…",
+    venueUnavailable: (reason: string) => `Nicht verfügbar${reason ? ` — ${reason}` : ""}`,
+    refreshing: "wird aktualisiert…",
+    windowNote: (start: string, end: string, days: number) =>
+      `Zeitfenster: ${start} – ${end} (UTC), ${days} vollständige${days === 1 ? "r Tag" : " Tage"}. Der laufende Tag wird nicht mitgezählt.`,
+    noteShortHistory: (n: number) => `${n} Paar${n === 1 ? "" : "e"} erst nach Fensterbeginn gelistet`,
+    noteGaps: (n: number) => `${n} Paar${n === 1 ? "" : "e"} mit fehlenden Tagen`,
+    noteUnpriced: (n: number) => `${n} Paar-Tag${n === 1 ? "" : "e"} ohne USD-Referenzkurs (ausgeschlossen)`,
+    noteFailed: (pairs: string) => `nicht geladen: ${pairs}`,
+    tableCaption: "Spot-Volumen großer Börsen in den erfassten Paaren für den gewählten Zeitraum",
     decentralizedExchanges: "Dezentralisierte Börsen (DEX)",
     loading: "Lädt…",
     rankedDex: (period: string, poolSize: number) =>
       `Sortiert nach ${period}-Volumen laut DefiLlama, nur Spot-DEX-Protokolle (Kategorie „Dexs“) — DEX-Aggregatoren sind ausgeschlossen, da ihr Volumen bereits über die hier gezeigten zugrunde liegenden Protokolle läuft und dort mitgezählt wird. Aus einem Pool von ${poolSize} erfassten Protokollen.`,
     fetchedSourceDefiLlama: (fetched: string) => `Abgerufen ${fetched} · Quelle: DefiLlama`,
-    historicalSnapshot: "Historische 24-Std.-Volumen-Momentaufnahme",
-    estimatedAtTodaysRate: "geschätzt, zum heutigen Kurs",
-    estimatedUsdEquivalent: "geschätztes USD-Äquivalent",
-    noVenuesAvailable: "Für diese Auswahl sind keine CEX-Börsen verfügbar.",
+    refreshingInBackground: " · wird im Hintergrund aktualisiert…",
     noProtocolsAvailable: "Für diese Auswahl sind keine DEX-Protokolle verfügbar.",
-    hide: "Ausblenden",
-    pairs: "Paare",
     partialData: (warnings: string) => `Teilweise verfügbare Daten: ${warnings}`,
     methodologyCex:
-      "Die öffentliche API von CoinGecko (kein Schlüssel, kein kostenpflichtiger Plan). Kandidaten werden für jeden Zeitraum nach dem HEUTIGEN 24-Std.-Volumen ausgewählt — das sind nicht zwingend die tatsächlichen Top-N-Börsen für ein anderes Zeitfenster, sondern nur unter den heutigen Top-Volumina. Selbst gemeldetes Volumen wird nicht geprüft; die Spalte „Trust Score“ wird angezeigt, damit eine Börse mit hohem Volumen und niedrigem Vertrauen sichtbar bleibt, statt verborgen zu werden. 1T verwendet den aktuellen gleitenden 24-Std.-Wert. 7T/30T/1J bilden keine Summe über den Zeitraum. CoinGeckos Dokumentation beschreibt die automatische Granularität des volume_chart-Endpunkts (10-minütlich / stündlich / täglich), dokumentiert aber nie, was der Zeitstempel eines Tagespunkts tatsächlich markiert — Zeitraumbeginn, Zeitraumende oder Beobachtungszeitpunkt. Regelmäßig verteilte Punkte klären das nicht; es wurde direkt mit einem 31-minütigen Vorher-Nachher-Test live geprüft, was auf eine Antwort hindeutete, aber nicht abschließend war. Statt auf einer unverifizierten Annahme eine Zeitraumsumme zu behaupten, zeigen 7T/30T/1J jeweils nur den jüngsten, nachweislich vollständigen Tag dieser Börse — gekennzeichnet als „Historische 24-Std.-Volumen-Momentaufnahme“ —, bis die Zeitstempel-Bedeutung tatsächlich geklärt werden kann. USD-Werte sind stets eine Schätzung: für 1T der heutige BTC/USD-Kurs, sonst der historische BTC/USD-Kurs des jeweiligen Tages — in keinem Fall ist bestätigt, dass dies exakt dem von CoinGecko selbst intern verwendeten Kurs entspricht.",
+      "Tageskerzen aus der öffentlichen Marktdaten-API jeder Börse (kein Schlüssel, kein Konto). Gezählt werden nur vollständige UTC-Tage; 1T ist gestern, 7T/30T/1J sind die letzten 7/30/365 vollständigen Tage, Tag für Tag summiert. Der Zeitstempel jeder Tageskerze ist von der Börse als Tagesbeginn 00:00 UTC dokumentiert (OKX und Bitget werden mit ihrer UTC-ausgerichteten Tageskerze abgefragt; bei Upbit wird das UTC-Kerzendatum verwendet, nicht der Zeitstempel des letzten Trades). Paare werden aus der aktuellen Instrumentenliste jeder Börse ermittelt, neu gelistete oder entfernte Paare werden also automatisch berücksichtigt. Von Börsen gemeldetes Volumen wird nicht unabhängig geprüft.",
+    methodologyUsdValuation:
+      "Das Tagesvolumen im Basis-Asset (z. B. gehandelte BTC) wird mit dem volumengewichteten USD-Durchschnittskurs desselben Tages auf Krakens echtem USD-Paar multipliziert. Eine einzige Bewertungsquelle für jede Börse und jede Quote-Währung bedeutet, dass für EUR-, KRW- oder TRY-Paare keine Wechselkurse nötig sind — ein lokaler Aufschlag (z. B. KRW auf Upbit) spiegelt sich im USD-Wert aber nicht wider.",
+    methodologyVenueSelection:
+      "Eine feste Liste von zehn großen Börsen mit hohem Vertrauen. Eine Rangfolge allein nach selbst gemeldetem Volumen würde Börsen mit niedrigem Vertrauen und wahrscheinlich künstlich aufgeblähtem Volumen vor Coinbase und Bybit setzen. Top 5 sind die ersten fünf dieser Liste.",
     methodologyDex:
       "Die kostenlose API von DefiLlama (api.llama.fi, kein Schlüssel). Die Summen sind DefiLlamas eigene übergeordnete Gesamtwerte für den Zeitraum, nie durch eigenes Aufsummieren einzelner Protokolle neu berechnet (das würde Protokollversionen wie Uniswap V3/V4 doppelt zählen oder von DefiLlamas eigener Kategorisierung abweichen). Die Protokolltabelle ist auf die Kategorie „Dexs“ gefiltert.",
-    methodologyComparison: (venueCount: string) =>
-      `Dargestellt als zwei getrennt abgegrenzte Summen, nicht als kombinierter Marktanteils-Kreis: Der CEX-Wert umfasst nur die oben gezeigten ${venueCount} Börsen (ausgewählt nach heutigem Volumen, wie angemerkt), während der DEX-Wert DefiLlamas gesamtes erfasstes Protokoll-Universum ist. Auch die Zeitfenster stimmen nicht genau überein (CEX für 7T/30T/1J ist jeweils der jüngste vollständige Tag der Börse; DEX ist DefiLlamas eigenes gleitendes Fenster zum Abrufzeitpunkt). Da sowohl der Börsenumfang als auch das Zeitfenster abweichen, wird aus diesen beiden Zahlen nie ein einzelner kombinierter Wert „CEX macht X % des Marktes aus“ berechnet oder angezeigt.`,
+    methodologyComparison:
+      "Dargestellt als zwei getrennt abgegrenzte Summen, kein Marktanteils-Vergleich: Der CEX-Wert umfasst nur die erfassten Hauptpaare der ausgewählten Börsen, der DEX-Wert ist DefiLlamas gesamtes erfasstes Protokoll-Universum über alle Token. Auch die Zeitfenster weichen leicht ab (vollständige UTC-Tage vs. DefiLlamas eigenes gleitendes Fenster), daher wird kein kombinierter Wert „CEX macht X % des Marktes aus“ berechnet.",
     methodologyAccessLimit:
       "Der Derivate-/Perpetuals-Überblick von DefiLlama erfordert einen kostenpflichtigen Plan (bestätigt: HTTP 402) und wurde nicht abgerufen; diese Seite zeigt ausschließlich Spot-Volumen.",
-    methodologyPairBreakdown:
-      "Für eine aufgeklappte Börse basiert dies auf den nach Volumen größten ~100 Paaren (Seite 1 der Ticker dieser Börse) — eine aktuelle Live-Momentaufnahme, unabhängig vom oben gewählten Zeitraum 7T/30T/1J, und nicht notwendigerweise jedes gelistete Paar bei einer sehr aktiven Börse.",
     methodologyCaching:
-      "Identische Anfragen gleichzeitiger Besucher werden zu einem einzigen vorgelagerten Aufruf zusammengeführt. Bei einem 429 respektiert diese App den Retry-After-Header des Anbieters mit genau einem begrenzten Wiederholungsversuch, statt zu raten. Ein bereits einmal abgerufenes Ergebnis wird bei einem erneuten Besuch sofort angezeigt (mit dem Hinweis „wird im Hintergrund aktualisiert…“, während ein neueres abgerufen wird), statt jeden Besucher die vollen Ladezeiten eines Kaltstarts erneut tragen zu lassen.",
-    tableCaption: "Rangliste des Spot-Volumens zentralisierter Börsen, nach Spalte sortierbar",
+      "Jede Börse wird unabhängig geladen und erscheint, sobald ihr Verlauf vorliegt. Anfragen werden pro Börse an deren öffentliches Ratenlimit angepasst — Kraken erlaubt etwa eine Anfrage pro Sekunde, ein Kaltstart dauert daher rund 30 Sekunden. Ergebnisse werden eine Stunde zwischengespeichert und danach sofort ausgeliefert, während im Hintergrund aktualisiert wird.",
     dexTableCaption: "Rangliste des DEX-Spot-Volumens nach Protokoll, nach Spalte sortierbar",
     colRank: "#",
-    colExchange: "Börse",
-    colTrustScore: "Trust Score",
-    colVolumeBtc: "Volumen (BTC)",
     colVolumeUsd: "Volumen (USD)",
-    colDetails: "Details",
     colProtocol: "Protokoll",
     colChains: "Chains",
     col24hDelta: "24-Std.-Δ",
     labelCexVolume: "CEX-Volumen",
+    labelUsdValuation: "USD-Bewertung",
+    labelVenueSelection: "Börsenauswahl",
     labelDexVolume: "DEX-Volumen",
     labelComparison: "CEX-vs-DEX-Vergleich",
     labelAccessLimit: "Bekannte Zugriffsbeschränkung",
-    labelPairBreakdown: "Aufschlüsselung nach Paaren",
     labelLoadingCaching: "Laden & Caching",
-  },
-
-  exchangeDrilldown: {
-    pairBreakdown: (exchangeName: string) => `${exchangeName} — Aufschlüsselung nach Paaren`,
-    scopeNote:
-      "Aktuelle Ticker-Momentaufnahme (in etwa die gleitenden letzten 24 Std.) — unabhängig vom oben gewählten Zeitraum 7T/30T/1J, nie als dessen Verteilung dargestellt.",
-    loading: "Paar-Aufschlüsselung wird geladen…",
-    error: "Die Paar-Aufschlüsselung für diese Börse konnte gerade nicht geladen werden.",
-    pairsRetrieved: (n: number, excluded: number) =>
-      `${n} Paar${n === 1 ? "" : "e"} abgerufen (nur Seite 1)${excluded > 0 ? `, ${excluded} als auffällig/veraltet ausgeschlossen` : ""}`,
-    byBaseAsset: "Nach Basis-Asset",
-    byQuoteType: "Nach Quote-Währungstyp",
-    colGroup: "Gruppe",
-    colVolumeUsd: "Volumen (USD)",
-    colShareOfRetrieved: "Anteil der abgerufenen Paare",
-    quoteTypeFiat: "Fiat (USD/EUR/…)",
-    quoteTypeStablecoin: "Stablecoin (USDT/USDC/…)",
-    quoteTypeCrypto: "Andere Kryptowährung",
-    refreshingInBackground: "Wird im Hintergrund aktualisiert…",
   },
 
   flows: {
@@ -520,12 +510,12 @@ const de = {
     caption: "CEX-vs-DEX-Volumenvergleich für den gewählten Zeitraum — zwei getrennt abgegrenzte Summen, kein Marktanteils-Vergleich",
     colVenueTypeScope: "Handelsplatztyp (Umfang)",
     colVolumeUsd: "Volumen (USD)",
-    cexRow: (n: number) => `CEX — nur ${n} ausgewählte Börse${n === 1 ? "" : "n"}`,
+    cexRow: (n: number, window: string) => `CEX — ${n} Börse${n === 1 ? "" : "n"}, nur erfasste Hauptpaare (${window} UTC)`,
     dexRow: "DEX — DefiLlamas gesamtes erfasstes Protokoll-Universum",
     ariaLabel: (cexVenues: number, cexVal: string, dexVal: string) =>
       `CEX (${cexVenues} ausgewählte Handelsplätze): ${cexVal}. DEX (gesamtes DefiLlama-Universum): ${dexVal}. Nur zur Größeneinordnung, kein kombinierter Marktanteil.`,
     footer:
-      "Diese beiden Balken vergleichen nur die absolute Größenordnung — sie sind kein kombinierter Marktanteils-Vergleich. Die CEX-Summe umfasst nur die oben ausgewählten Börsen (eine andere Börsenanzahl ändert sie); die DEX-Summe ist DefiLlamas eigener globaler Wert, unabhängig von der Börsenanzahl. Auch ihre Zeitfenster stimmen nicht genau überein (siehe Methodik unten). Aus diesen beiden Zahlen wird bewusst kein einzelner Wert „CEX macht X % des Marktes aus“ berechnet.",
+      "Diese beiden Balken vergleichen nur die absolute Größenordnung — sie sind kein kombinierter Marktanteils-Vergleich. Die CEX-Summe umfasst nur die erfassten Hauptpaare der oben gezeigten Börsen (eine andere Börsenanzahl ändert sie); die DEX-Summe ist DefiLlamas eigener globaler Wert, unabhängig von der Börsenanzahl. Auch ihre Zeitfenster stimmen nicht genau überein (siehe Methodik unten). Aus diesen beiden Zahlen wird bewusst kein einzelner Wert „CEX macht X % des Marktes aus“ berechnet.",
   },
 } satisfies Dictionary;
 

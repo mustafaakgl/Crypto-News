@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCandidateVenues } from "@/lib/exchangeAnalytics/cexVenues";
+import { CEX_VENUES } from "@/lib/exchangeVolume/venues";
 import { getFlowsProvider } from "@/lib/exchangeFlows/provider";
 import { FLOW_ASSETS, FLOW_NETWORKS_BY_ASSET } from "@/lib/exchangeFlows/types";
 import type { ExchangePeriod, VenueCount } from "@/lib/exchangeAnalytics/types";
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   const requestedNetwork = networkParam === "" || networkParam === null ? null : (networkParam as FlowNetwork);
   const network: FlowNetwork = validNetworks.includes(requestedNetwork) ? requestedNetwork : validNetworks[0];
 
-  const candidates = await getCandidateVenues(count);
+  const candidates = CEX_VENUES.slice(0, count).map((v) => ({ id: v.id, name: v.name }));
   const result = await getFlowsProvider().getOverview({ asset, network, period, candidates });
 
   return NextResponse.json(result);

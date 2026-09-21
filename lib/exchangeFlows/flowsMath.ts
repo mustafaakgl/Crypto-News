@@ -18,9 +18,8 @@ function dayStartMs(dateIso: string): number {
   return Date.parse(`${dateIso}T00:00:00.000Z`);
 }
 
-// Mirrors lib/exchangeAnalytics/periodMath.ts's completedDailyPoints rule
-// (a "today"-dated point is dropped unless its own 24h window has fully
-// elapsed) but also accounts for a provider's own PUBLICATION lag — an
+// A "today"-dated point is dropped unless its own 24h window has fully
+// elapsed. Also accounts for a provider's own PUBLICATION lag — an
 // on-chain flow provider often finalizes yesterday's number some hours
 // into today, not the instant midnight UTC passes. A caller that hasn't
 // verified the real lag for its provider should pass 0, never guess a
@@ -31,7 +30,7 @@ export function completedFlowDays(points: DailyFlowPoint[], nowMs: number, publi
 
 export type FlowSeriesValidation = { ok: true } | { ok: false; reason: string };
 
-// Same intent as periodMath.validateDailySeries: a daily series is only
+// A daily series is only
 // safe to sum/chart as non-overlapping days if it actually has no gaps and
 // no repeated dates — checked at runtime, never assumed from the request
 // alone.

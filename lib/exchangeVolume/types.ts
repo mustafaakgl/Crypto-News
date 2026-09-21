@@ -1,0 +1,44 @@
+import type { ExchangePeriod } from "@/lib/exchangeAnalytics/types";
+
+export type BaseAsset = "BTC" | "ETH" | "SOL" | "XRP";
+export type FiatCurrency = "USD" | "EUR" | "GBP" | "KRW" | "TRY";
+export type QuoteCurrency = FiatCurrency | "USDT" | "USDC" | "BTC";
+export type QuoteType = "fiat" | "stablecoin" | "crypto";
+
+export type PairRef = { base: BaseAsset; quote: QuoteCurrency; symbol: string };
+
+// dayStartMs is always 00:00 UTC of the day the candle covers.
+export type DailyCandle = { dayStartMs: number; baseVolume: number };
+
+export type PairHistory = PairRef & { candles: DailyCandle[] };
+
+// base asset -> (dayStartMs -> USD price)
+export type ReferencePrices = Partial<Record<BaseAsset, Map<number, number>>>;
+
+export type VolumeBreakdown = {
+  totalUsd: number;
+  byQuoteType: Record<QuoteType, number>;
+  byQuote: Record<QuoteCurrency, number>;
+  byBase: Record<BaseAsset, { usd: number; qty: number }>;
+};
+
+export type PeriodVolume = VolumeBreakdown & {
+  days: number;
+  startDay: string; // YYYY-MM-DD, UTC, inclusive
+  endDay: string; // YYYY-MM-DD, UTC, inclusive
+  pairsWithShortHistory: number;
+  pairsWithGaps: number;
+  unpricedDays: number; // pair-days with volume but no reference USD price
+};
+
+export type VenueVolumeResult = {
+  venueId: string;
+  name: string;
+  url: string;
+  status: "ok" | "partial" | "error";
+  periods: Record<ExchangePeriod, PeriodVolume> | null;
+  pairs: string[]; // e.g. "BTC/USDT", every pair counted
+  pairsFailed: string[];
+  asOf: string;
+  warnings: string[];
+};

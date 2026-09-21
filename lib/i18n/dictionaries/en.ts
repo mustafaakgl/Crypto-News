@@ -352,77 +352,67 @@ const en = {
     waitingOnData: (side: string) =>
       `Waiting on ${side} data before showing a comparison — a comparison built from only one completed side would misrepresent the other as zero.`,
     centralizedExchanges: "Centralized exchanges",
-    loadingShort: (seconds: number) => `Loading… (${seconds}s elapsed)`,
-    loadingLong: (count: number, estimate: string, seconds: number) =>
-      `Fetching ${count}-venue historical data from CoinGecko's public API, paced to its free-tier rate limit — typically ${estimate}s on a cold load, faster if this selection was viewed recently. ${seconds}s elapsed.`,
-    rankedTrailing24h: (poolSize: number) =>
-      `Ranked by trailing 24h spot volume as reported by CoinGecko, from a pool of the ${poolSize} exchanges CoinGecko ranks by its own trust score — not necessarily every exchange that exists.`,
-    rankedOtherPeriods: (poolSize: number, period: string) =>
-      `Selected by TODAY's 24h volume from a pool of the ${poolSize} CoinGecko-ranked exchanges. What CoinGecko's daily volume_chart timestamps actually measure isn't documented and couldn't be conclusively verified (see Methodology), so ${period} does not sum a period total — each row shows that venue's latest verifiably-complete day instead.`,
-    windowFetched: (start: string, end: string, fetched: string) => `Window: ${start} – ${end} (Europe/Berlin) · fetched ${fetched}`,
-    refreshingInBackground: " · refreshing in the background…",
-    loadedIn: (seconds: string) => ` · loaded in ${seconds}s`,
+    cexIntro: (n: number) =>
+      `Spot volume of ${n} major exchanges on their main pairs: BTC, ETH, SOL and XRP traded against fiat (USD, EUR, GBP, KRW, TRY), stablecoins (USDT, USDC) or BTC. This is not each exchange's total volume across every listed pair.`,
+    ariaSelectView: "Select breakdown",
+    viewLabels: { quoteType: "By currency type", base: "By asset", fiat: "By fiat currency", trend: "Over time" },
+    quoteTypeLabels: { fiat: "Fiat", stablecoin: "Stablecoin", crypto: "BTC-quoted" },
+    quoteTypeLegend: { fiat: "Fiat (USD, EUR, GBP, KRW, TRY)", stablecoin: "Stablecoin (USDT, USDC)", crypto: "Priced in BTC (ETH/BTC, …)" },
+    colExchange: "Exchange",
+    colTotal: "Tracked volume",
+    colFiatTotal: "Fiat total",
+    colMix: "Mix",
+    colPerDay: (period: string) => `${period} avg/day`,
+    colVs1y: "1D vs 1Y avg",
+    trendNote:
+      "Average daily volume in each period, so windows of different length compare directly. Not affected by the period selector above.",
+    totalRow: (n: number) => `All ${n} exchanges`,
+    totalRowPartial: (n: number, of: number) => `${n} of ${of} exchanges loaded`,
+    venueLoading: "Loading daily history…",
+    venueUnavailable: (reason: string) => `Unavailable${reason ? ` — ${reason}` : ""}`,
+    refreshing: "refreshing…",
+    windowNote: (start: string, end: string, days: number) =>
+      `Window: ${start} – ${end} (UTC), ${days} complete day${days === 1 ? "" : "s"}. Today's unfinished day is not counted.`,
+    noteShortHistory: (n: number) => `${n} pair${n === 1 ? "" : "s"} listed after the window start`,
+    noteGaps: (n: number) => `${n} pair${n === 1 ? "" : "s"} with missing days`,
+    noteUnpriced: (n: number) => `${n} pair-day${n === 1 ? "" : "s"} without a USD reference price (excluded)`,
+    noteFailed: (pairs: string) => `not loaded: ${pairs}`,
+    tableCaption: "Spot volume of major exchanges on tracked pairs, for the selected period",
     decentralizedExchanges: "Decentralized exchanges",
     loading: "Loading…",
     rankedDex: (period: string, poolSize: number) =>
       `Ranked by ${period} volume as reported by DefiLlama, spot DEX protocols only (category "Dexs") — DEX aggregators are excluded since their volume is already routed through, and counted by, the underlying protocols shown here. From a pool of ${poolSize} tracked protocols.`,
     fetchedSourceDefiLlama: (fetched: string) => `Fetched ${fetched} · source: DefiLlama`,
-    historicalSnapshot: "Historical 24h volume snapshot",
-    estimatedAtTodaysRate: "estimated, at today's rate",
-    estimatedUsdEquivalent: "estimated USD equivalent",
-    noVenuesAvailable: "No CEX venues available for this selection.",
+    refreshingInBackground: " · refreshing in the background…",
     noProtocolsAvailable: "No DEX protocols available for this selection.",
-    hide: "Hide",
-    pairs: "Pairs",
     partialData: (warnings: string) => `Partial data: ${warnings}`,
     methodologyCex:
-      "CoinGecko's public API (no key, no paid plan). Candidates for every period are selected by TODAY's 24h volume — this is not necessarily the true top-N venues by any other window, only among today's top volumes. Self-reported volume is not audited; the Trust score column is shown so a high-volume, low-trust venue is visible, not hidden. 1D uses the current trailing-24h figure. 7D/30D/1Y do not sum a period total. CoinGecko's docs describe the volume_chart endpoint's auto-granularity (10-minutely / hourly / daily) but never document what a daily point's timestamp actually marks — period start, period end, or observation time. Regularly-spaced points don't resolve that; it was tested directly with a live 31-minute before/after read, which was suggestive but not conclusive. Rather than assert a period total on an unverified premise, 7D/30D/1Y each show that venue's single most recent verifiably-complete day — labeled \"Historical 24h volume snapshot\" — until the timestamp semantics can actually be confirmed. USD figures are always an estimate: today's BTC/USD rate for 1D, that specific day's own historical BTC/USD rate otherwise — neither is confirmed to match the exact rate CoinGecko itself used internally.",
+      "Daily candles from each exchange's own public market-data API (no key, no account). Only complete UTC days are counted; 1D is yesterday, 7D/30D/1Y are the last 7/30/365 complete days summed day by day. Every day's candle timestamp is documented by the exchange as that day's 00:00 UTC start (OKX and Bitget are queried with their UTC-aligned daily bar; Upbit's UTC candle date is used, not its last-trade timestamp). Pairs are discovered from each exchange's live instrument list, so a pair listed or delisted later is picked up automatically. Exchange-reported volume is not independently audited.",
+    methodologyUsdValuation:
+      "Each day's base-asset volume (e.g. BTC traded) is multiplied by that same day's volume-weighted average USD price on Kraken's real-USD pair. One valuation source for every exchange and every quote currency means no FX rates are needed for EUR, KRW or TRY pairs — but a local premium (e.g. KRW on Upbit) is not reflected in the USD figure.",
+    methodologyVenueSelection:
+      "A fixed list of ten large, high-trust exchanges. Ranking purely by self-reported volume would put low-trust venues with likely wash-traded volume above Coinbase and Bybit. Top 5 is the first five of this list.",
     methodologyDex:
       "DefiLlama's free API (api.llama.fi, no key). Totals are DefiLlama's own top-level aggregate for the period, never re-derived by summing individual protocols (which would double-count protocol versions like Uniswap V3/V4, or miscount vs. DefiLlama's own categorization). The protocol table is filtered to category \"Dexs\" only.",
-    methodologyComparison: (venueCount: string) =>
-      `Shown as two separately-scoped totals, not a combined market-share pie: the CEX figure covers only the ${venueCount} venues shown above (selected by today's volume, as noted), while the DEX figure is DefiLlama's full tracked-protocol universe. Their time windows also don't exactly align (CEX for 7D/30D/1Y is each venue's own most recent complete day; DEX is DefiLlama's own trailing window as of its fetch time). Because both the venue scope and the time window differ, this page never computes or shows a single combined "CEX is X% of the market" percentage from these two numbers.`,
+    methodologyComparison:
+      "Shown as two separately-scoped totals, not a market-share split: the CEX figure covers only the selected exchanges' tracked major pairs, while the DEX figure is DefiLlama's whole tracked-protocol universe across all tokens. Their windows also differ slightly (complete UTC days vs. DefiLlama's own trailing window), so no combined \"CEX is X% of the market\" figure is computed.",
     methodologyAccessLimit:
       "DefiLlama's derivatives/perps overview requires a paid plan (confirmed: HTTP 402) and was not accessed; this page only ever shows spot volume.",
-    methodologyPairBreakdown:
-      "For an expanded exchange, based on the top ~100 pairs by volume (page 1 of that exchange's tickers), which is a live current snapshot independent of the 7D/30D/1Y period selected above — not necessarily every listed pair for a very active exchange.",
     methodologyCaching:
-      "Identical requests from concurrent visitors are coalesced into one upstream call. On a 429, this app honors the provider's Retry-After header with a single bounded retry rather than guessing. A result already fetched once is served immediately on a repeat visit (labeled \"refreshing in the background…\" while a newer one is fetched) rather than making every visitor re-pay the full cold-load cost.",
-    tableCaption: "Centralized exchange spot volume ranking, sortable by column",
+      "Each exchange is loaded independently and appears as soon as its history is in. Requests are paced per exchange to its public rate limit — Kraken allows about one request per second, so a cold load takes around 30 seconds. Results are cached for an hour and, after that, served immediately while a refresh runs in the background.",
     dexTableCaption: "DEX spot volume ranking by protocol, sortable by column",
     colRank: "#",
-    colExchange: "Exchange",
-    colTrustScore: "Trust score",
-    colVolumeBtc: "Volume (BTC)",
     colVolumeUsd: "Volume (USD)",
-    colDetails: "Details",
     colProtocol: "Protocol",
     colChains: "Chains",
     col24hDelta: "24h Δ",
     labelCexVolume: "CEX volume",
+    labelUsdValuation: "USD valuation",
+    labelVenueSelection: "Exchange selection",
     labelDexVolume: "DEX volume",
     labelComparison: "CEX vs DEX comparison",
     labelAccessLimit: "Known access limit",
-    labelPairBreakdown: "Pair breakdown",
     labelLoadingCaching: "Loading & caching",
-  },
-
-  exchangeDrilldown: {
-    pairBreakdown: (exchangeName: string) => `${exchangeName} — pair breakdown`,
-    scopeNote:
-      "Current ticker snapshot (roughly the trailing 24h) — independent of whatever 7D/30D/1Y period is selected above, never presented as that period's distribution.",
-    loading: "Loading pair breakdown…",
-    error: "Could not load a pair breakdown for this exchange right now.",
-    pairsRetrieved: (n: number, excluded: number) =>
-      `${n} pair${n === 1 ? "" : "s"} retrieved (page 1 only)${excluded > 0 ? `, ${excluded} excluded as anomalous/stale` : ""}`,
-    byBaseAsset: "By base asset",
-    byQuoteType: "By quote currency type",
-    colGroup: "Group",
-    colVolumeUsd: "Volume (USD)",
-    colShareOfRetrieved: "Share of retrieved pairs",
-    quoteTypeFiat: "Fiat (USD/EUR/…)",
-    quoteTypeStablecoin: "Stablecoin (USDT/USDC/…)",
-    quoteTypeCrypto: "Other crypto",
-    refreshingInBackground: "Refreshing in the background…",
   },
 
   flows: {
@@ -518,12 +508,12 @@ const en = {
     caption: "CEX vs DEX volume comparison for the selected period — two separately-scoped totals, not a market-share split",
     colVenueTypeScope: "Venue type (scope)",
     colVolumeUsd: "Volume (USD)",
-    cexRow: (n: number) => `CEX — ${n} selected exchange${n === 1 ? "" : "s"} only`,
+    cexRow: (n: number, window: string) => `CEX — ${n} exchange${n === 1 ? "" : "s"}, tracked major pairs only (${window} UTC)`,
     dexRow: "DEX — DefiLlama's full tracked-protocol universe",
     ariaLabel: (cexVenues: number, cexVal: string, dexVal: string) =>
       `CEX (${cexVenues} selected venues): ${cexVal}. DEX (DefiLlama full universe): ${dexVal}. Shown for scale only, not a combined market share.`,
     footer:
-      "These two bars compare absolute scale only — they are not a combined market-share split. The CEX total is only the selected exchanges above (increasing the venue count changes it); the DEX total is DefiLlama's own global figure, unrelated to any venue count. Their time windows also don't exactly align (see Methodology below). A single \"CEX is X% of the market\" figure is deliberately not computed from these two numbers.",
+      "These two bars compare absolute scale only — they are not a combined market-share split. The CEX total is only the tracked major pairs of the exchanges above (changing the venue count changes it); the DEX total is DefiLlama's own global figure, unrelated to any venue count. Their time windows also don't exactly align (see Methodology below). A single \"CEX is X% of the market\" figure is deliberately not computed from these two numbers.",
   },
 } as const;
 
