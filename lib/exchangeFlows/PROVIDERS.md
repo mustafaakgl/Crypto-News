@@ -1,6 +1,6 @@
 # Exchange Flows — data source
 
-The Flows tab shows USDT and USDC flows on Ethereum for exchanges whose wallet
+The Flows tab shows USDT, USDC and native ETH flows on Ethereum for exchanges whose wallet
 labels were checked, from Dune. This file records why Dune was chosen, what
 its limits are, and the alternatives that were evaluated. The same facts are
 encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).

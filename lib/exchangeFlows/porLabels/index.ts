@@ -6,9 +6,9 @@ import type { ExtraLabel } from "@/lib/exchangeFlows/duneSql";
 // Reserve wallets exchanges publish in their proof of reserves, added on top
 // of Dune's labels. Checked 2026-09-21 against Dune's own labels (share of
 // the reserve balance Dune already covered):
-//   Binance (hot/cold list): BTC 93%, USDT 95%, USDC 57%
+//   Binance (hot/cold list): BTC 93%, USDT 95%, USDC 57%, ETH 94%
 //   OKX (all reserve addresses; the ones holding 99.9% of each balance are
-//   kept, staking validators left out): BTC 54%, USDT 58%, USDC 0.9%
+//   kept, staking validators left out): BTC 54%, USDT 58%, USDC 0.9%, ETH 18%
 //   Tron USDT: Binance 85%, OKX 0% (OKX: the 206 addresses holding 99% kept)
 // Bybit's current list is only downloadable after logging in, so Bybit uses
 // Dune's labels alone. Replacing a file changes LABELS_VERSION, which makes

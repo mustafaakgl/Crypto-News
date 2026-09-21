@@ -42,10 +42,11 @@ const SOURCES: Record<FlowsNetwork, FlowSource> = {
 
 export const FLOW_NETWORKS: FlowsNetwork[] = ["ethereum", "bitcoin", "tron"];
 
-// Labels and tracked venues are part of the key: new reserve wallets or a newly
-// tracked exchange start a fresh backfill instead of mixing coverage.
+// Labels, tracked venues and assets are part of the key: new reserve wallets,
+// a newly tracked exchange or asset start a fresh backfill instead of mixing coverage.
 export function flowsSourceKey(network: FlowsNetwork): string {
-  return `dune:${network}:${LABELS_VERSION}:${SOURCES[network].venues.map((v) => v.id).join("+")}`;
+  const { venues, assets } = SOURCES[network];
+  return `dune:${network}:${LABELS_VERSION}:${venues.map((v) => v.id).join("+")}:${assets.join("+")}`;
 }
 
 export function trackedFlowVenues(network: FlowsNetwork): string[] {

@@ -36,9 +36,12 @@ export const DUNE_TRON_VENUES = [
   { id: "bitget", duneName: "Bitget" },
 ] as const;
 
+// tokens.transfers lists native ETH (including value moved by internal calls)
+// under the zero address, with token_standard 'native'.
 export const DUNE_TOKENS = [
   { asset: "USDT", contract: "0xdac17f958d2ee523a2206206994597c13d831ec7" },
   { asset: "USDC", contract: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" },
+  { asset: "ETH", contract: "0x0000000000000000000000000000000000000000" },
 ] as const;
 
 // Addresses an exchange itself publishes (e.g. in proof of reserves). They

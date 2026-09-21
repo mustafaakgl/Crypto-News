@@ -344,7 +344,7 @@ const de = {
     backLink: "← Asset-Analysen",
     heading: "Börsen-Analysen",
     subheading:
-      "Spot-Handelsvolumen auf zentralisierten (CEX) und dezentralisierten (DEX) Börsen, Stablecoin-Flüsse erfasster Börsen-Wallets und Kursabstände zwischen beiden Marktarten — keine Futures/Perpetuals, keine KI-generierten Kommentare.",
+      "Spot-Handelsvolumen auf zentralisierten (CEX) und dezentralisierten (DEX) Börsen, Stablecoin-, ETH- und BTC-Flüsse erfasster Börsen-Wallets und Kursabstände zwischen beiden Marktarten — keine Futures/Perpetuals, keine KI-generierten Kommentare.",
     ariaView: "Börsen-Analysen-Ansicht",
     tabVolume: "Volumen",
     tabFlows: "Flows",
@@ -471,7 +471,7 @@ const de = {
     betweenOut: (v: string) => `ab ${v}`,
     notTracked: "Für dieses Asset noch nicht erfasst — die Wallet-Abdeckung dieser Börse wurde noch nicht geprüft.",
     notCollected: "Für diesen Zeitraum liegt noch nicht genug gesammelter Verlauf vor.",
-    noLabeledActivity: "In diesem Zeitraum keine Transfers auf den zugeordneten Wallets dieser Börse — die Zuordnungen sind vermutlich veraltet, daher wird kein Wert angezeigt.",
+    noLabeledActivity: "Die zugeordneten Wallets dieser Börse zeigen keinen regelmäßigen Verkehr in beide Richtungen (nur wenige Transfers oder nur Zu- bzw. nur Abflüsse) — die Zuordnungen sind vermutlich veraltet, daher wird kein Wert angezeigt.",
     basisVerified: "✓ mit Reservenachweis abgeglichen",
     basisDuneOnly: "Nur Dune-Zuordnungen · ungeprüft",
     historyTooShort: (from: string, needed: string) => `Der Flussverlauf wird seit ${from} gesammelt; dieser Zeitraum benötigt Daten ab ${needed}.`,
@@ -484,11 +484,15 @@ const de = {
     methodology: [
       [
         "Was gezählt wird",
-        "USDT und USDC auf Ethereum (alle zehn Börsen), USDT auf Tron (die sechs Börsen, die Dune dort zuordnet: Binance, OKX, Bybit, KuCoin, Gate, Bitget) sowie BTC auf Bitcoin (Binance, OKX), die in bekannte Wallets der jeweiligen Börse fließen oder sie verlassen. Nettofluss = Zufluss − Abfluss, in Einheiten des jeweiligen Assets; USDT und USDC sind an den USD gekoppelt.",
+        "USDT, USDC und natives ETH auf Ethereum (alle zehn Börsen), USDT auf Tron (die sechs Börsen, die Dune dort zuordnet: Binance, OKX, Bybit, KuCoin, Gate, Bitget) sowie BTC auf Bitcoin (Binance, OKX), die in bekannte Wallets der jeweiligen Börse fließen oder sie verlassen. Nettofluss = Zufluss − Abfluss, in Einheiten des jeweiligen Assets; USDT und USDC sind an den USD gekoppelt.",
       ],
       [
         "Welche Wallets",
-        "Dunes Börsen-Adresszuordnungen (cex.addresses), ergänzt um die Reserve-Wallets, die Binance (Prüfung vom 1. Sept. 2026) und OKX (Stand 11. Aug. 2026) in ihren Reservenachweisen veröffentlichen. Gegen diese Listen geprüft deckten Dunes Zuordnungen allein bei Binance 93 % des BTC-, 95 % des USDT- und 57 % des USDC-Bestands ab, bei OKX 54 % des BTC-, 58 % des USDT- und unter 1 % des USDC-Bestands — auf Tron 85 % des USDT-Bestands von Binance und nichts von OKX; mit den veröffentlichten Wallets sind diese Reserve-Wallets praktisch vollständig abgedeckt. Bei OKX wurden dadurch vor allem Transfers zwischen eigenen Hot- und Cold-Wallets aus Zu- und Abfluss herausgenommen. Alle anderen Börsen nutzen nur Dunes Zuordnungen und sind als „ungeprüft“ markiert: Coinbase, Upbit und Kraken veröffentlichen keine Wallet-Liste zum Abgleich, Bybit zeigt seine aktuelle Liste nur angemeldeten Nutzern. Mining-Pool-Wallets und Staking-Validatoren sind ausgeschlossen.",
+        "Dunes Börsen-Adresszuordnungen (cex.addresses), ergänzt um die Reserve-Wallets, die Binance (Prüfung vom 1. Sept. 2026) und OKX (Stand 11. Aug. 2026) in ihren Reservenachweisen veröffentlichen. Gegen diese Listen geprüft deckten Dunes Zuordnungen allein bei Binance 93 % des BTC-, 95 % des USDT-, 57 % des USDC- und 94 % des ETH-Bestands ab, bei OKX 54 % des BTC-, 58 % des USDT-, unter 1 % des USDC- und 18 % des ETH-Bestands — auf Tron 85 % des USDT-Bestands von Binance und nichts von OKX; mit den veröffentlichten Wallets sind diese Reserve-Wallets praktisch vollständig abgedeckt. Bei OKX wurden dadurch vor allem Transfers zwischen eigenen Hot- und Cold-Wallets aus Zu- und Abfluss herausgenommen. Alle anderen Börsen nutzen nur Dunes Zuordnungen und sind als „ungeprüft“ markiert: Coinbase, Upbit und Kraken veröffentlichen keine Wallet-Liste zum Abgleich, Bybit zeigt seine aktuelle Liste nur angemeldeten Nutzern. Mining-Pool-Wallets und Staking-Validatoren sind ausgeschlossen.",
+      ],
+      [
+        "ETH",
+        "Bei ETH zählt jede Übertragung von nativem Ether, auch Ether, der durch Smart-Contract-Aufrufe bewegt wird. ETH, das eine Börse ins Ethereum-Staking einzahlt, verlässt ihre bekannten Wallets und zählt daher als Abfluss; Wrapped ETH (WETH) ist nicht enthalten.",
       ],
       [
         "Bitcoin",

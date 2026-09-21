@@ -33,7 +33,7 @@ export const FLOW_PROVIDER_CANDIDATES: FlowProviderCandidate[] = [
     name: "Dune",
     verdict: "supported",
     blocker:
-      "In use for USDT/USDC on Ethereum: SQL over cex.addresses wallet labels and tokens.transfers, run by the server's collector with DUNE_API_KEY (free plan, 2,500 credits/month; a 3-exchange × 2-token daily refresh costs about 0.5 credits). No Bitcoin coverage in its curated flows, and wallet labels were last extended in 2025-08, so figures are a lower bound.",
+      "In use for USDT/USDC/ETH on Ethereum: SQL over cex.addresses wallet labels and tokens.transfers, run by the server's collector with DUNE_API_KEY (free plan, 2,500 credits/month; a 3-exchange × 2-token daily refresh costs about 0.5 credits). No Bitcoin coverage in its curated flows, and wallet labels were last extended in 2025-08, so figures are a lower bound.",
     docsUrl: "https://docs.dune.com/data-catalog/curated/cex-flows/addresses",
   },
   {

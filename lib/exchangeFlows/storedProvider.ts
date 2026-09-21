@@ -19,6 +19,13 @@ export function storedFlowsAvailable(): boolean {
   return hasDb() && FLOW_NETWORKS.some((n) => readSync(n) !== undefined);
 }
 
+// On a live exchange wallet money moves both ways, many times a day. Labels
+// that over the whole collected history only receive (typically dust/spam
+// sent to old addresses), only send, or see a handful of transfers are stale:
+// the smaller side must reach this share of the larger, at this many transfers a day.
+const MIN_TWO_WAY_SHARE = 0.1;
+const MIN_LEGS_PER_DAY = 2;
+
 function isFlowsNetwork(v: string | null): v is FlowsNetwork {
   return (FLOW_NETWORKS as (string | null)[]).includes(v);
 }
@@ -43,6 +50,21 @@ export class StoredFlowsProvider implements FlowsProvider {
               sum(outflow_cex) AS outflow_cex, sum(internal) AS internal, sum(legs) AS legs, count(*) AS days
        FROM exchange_flows_daily WHERE venue = ? AND asset = ? AND network = ? AND day BETWEEN ? AND ?`
     );
+    const historyStmt = getDb().prepare(
+      `SELECT sum(inflow_ext + inflow_cex) AS inflow, sum(outflow_ext + outflow_cex) AS outflow, sum(legs) AS legs, count(*) AS days
+       FROM exchange_flows_daily WHERE venue = ? AND asset = ? AND network = ? AND day BETWEEN ? AND ?`
+    );
+    const labelsLookStale = (venue: string) => {
+      const h = historyStmt.get(venue, asset, network, sync.first_day, sync.complete_through_day) as {
+        inflow: number | null;
+        outflow: number | null;
+        legs: number | null;
+        days: number;
+      };
+      const inflow = h.inflow ?? 0;
+      const outflow = h.outflow ?? 0;
+      return (h.legs ?? 0) < MIN_LEGS_PER_DAY * h.days || Math.min(inflow, outflow) < MIN_TWO_WAY_SHARE * Math.max(inflow, outflow);
+    };
     const updatedAt = new Date(sync.updated_at).toISOString();
 
     const rows: ExchangeFlowRow[] = candidates.map((c) => {
@@ -64,8 +86,8 @@ export class StoredFlowsProvider implements FlowsProvider {
       const s = sumStmt.get(c.id, asset, network, startDay, endDay) as Sums;
       if (s.days !== endDay - startDay + 1) return { ...empty, unavailableReason: "not_collected" };
       const verified = VERIFIED_VENUES[network].includes(c.id);
-      // Zero transfers on an unverified exchange's labels means the labels are stale, not that nothing moved.
-      if (!verified && s.legs === 0) return { ...empty, unavailableReason: "no_labeled_activity" };
+      // No transfers, or one-way traffic only, on an unverified exchange's labels means the labels are stale, not that nothing moved.
+      if (!verified && (s.legs === 0 || labelsLookStale(c.id))) return { ...empty, unavailableReason: "no_labeled_activity" };
       const inflow = s.inflow_ext + s.inflow_cex;
       const outflow = s.outflow_ext + s.outflow_cex;
       return {
