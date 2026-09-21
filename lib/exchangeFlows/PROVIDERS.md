@@ -54,6 +54,15 @@ encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).
   in the week tested). Adding them cost almost nothing: the 30-day Ethereum
   backfill went from 1.3 to 1.7 credits. The 30-day Bitcoin backfill for
   Binance and OKX cost 13–20 credits.
+- Tron USDT (`tronUsdtFlowsSql`): `tether_tron.tether_usd_evt_transfer`
+  joined to Tron labels, which Dune stores as base58 "T…" text and are
+  decoded with `from_base58` to the 20-byte account id the events use.
+  Dune labels Tron wallets only for Binance (16), OKX (15), Bitget (11),
+  Bybit (8), KuCoin (5) and Gate (2), last added 2024-04. Checked against
+  proof of reserves they covered 85% of Binance's and 0% of OKX's Tron USDT
+  balance, so both lists are added (Binance 20 hot/cold addresses, OKX the
+  206 holding 99%). A 7-day query cost 0.76 credits; Binance's Tron USDT
+  inflow that week ($6.0B) was 1.5× its Ethereum USDT inflow.
 - Bybit's current wallet list is only downloadable after logging in (the
   only public file is from 2022-12), so Bybit uses Dune's labels alone.
 - Bitcoin (Binance, OKX): UTXO rules per transaction in `bitcoinFlowsSql`;

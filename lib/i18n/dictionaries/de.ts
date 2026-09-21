@@ -484,11 +484,11 @@ const de = {
     methodology: [
       [
         "Was gezählt wird",
-        "USDT und USDC auf Ethereum (alle zehn Börsen) sowie BTC auf Bitcoin (Binance, OKX), die in bekannte Wallets der jeweiligen Börse fließen oder sie verlassen. Nettofluss = Zufluss − Abfluss, in Einheiten des jeweiligen Assets; USDT und USDC sind an den USD gekoppelt.",
+        "USDT und USDC auf Ethereum (alle zehn Börsen), USDT auf Tron (die sechs Börsen, die Dune dort zuordnet: Binance, OKX, Bybit, KuCoin, Gate, Bitget) sowie BTC auf Bitcoin (Binance, OKX), die in bekannte Wallets der jeweiligen Börse fließen oder sie verlassen. Nettofluss = Zufluss − Abfluss, in Einheiten des jeweiligen Assets; USDT und USDC sind an den USD gekoppelt.",
       ],
       [
         "Welche Wallets",
-        "Dunes Börsen-Adresszuordnungen (cex.addresses), ergänzt um die Reserve-Wallets, die Binance (Prüfung vom 1. Sept. 2026) und OKX (Stand 11. Aug. 2026) in ihren Reservenachweisen veröffentlichen. Gegen diese Listen geprüft deckten Dunes Zuordnungen allein bei Binance 93 % des BTC-, 95 % des USDT- und 57 % des USDC-Bestands ab, bei OKX 54 % des BTC-, 58 % des USDT- und unter 1 % des USDC-Bestands; mit den veröffentlichten Wallets sind diese Reserve-Wallets praktisch vollständig abgedeckt. Bei OKX wurden dadurch vor allem Transfers zwischen eigenen Hot- und Cold-Wallets aus Zu- und Abfluss herausgenommen. Alle anderen Börsen nutzen nur Dunes Zuordnungen und sind als „ungeprüft“ markiert: Coinbase, Upbit und Kraken veröffentlichen keine Wallet-Liste zum Abgleich, Bybit zeigt seine aktuelle Liste nur angemeldeten Nutzern. Mining-Pool-Wallets und Staking-Validatoren sind ausgeschlossen.",
+        "Dunes Börsen-Adresszuordnungen (cex.addresses), ergänzt um die Reserve-Wallets, die Binance (Prüfung vom 1. Sept. 2026) und OKX (Stand 11. Aug. 2026) in ihren Reservenachweisen veröffentlichen. Gegen diese Listen geprüft deckten Dunes Zuordnungen allein bei Binance 93 % des BTC-, 95 % des USDT- und 57 % des USDC-Bestands ab, bei OKX 54 % des BTC-, 58 % des USDT- und unter 1 % des USDC-Bestands — auf Tron 85 % des USDT-Bestands von Binance und nichts von OKX; mit den veröffentlichten Wallets sind diese Reserve-Wallets praktisch vollständig abgedeckt. Bei OKX wurden dadurch vor allem Transfers zwischen eigenen Hot- und Cold-Wallets aus Zu- und Abfluss herausgenommen. Alle anderen Börsen nutzen nur Dunes Zuordnungen und sind als „ungeprüft“ markiert: Coinbase, Upbit und Kraken veröffentlichen keine Wallet-Liste zum Abgleich, Bybit zeigt seine aktuelle Liste nur angemeldeten Nutzern. Mining-Pool-Wallets und Staking-Validatoren sind ausgeschlossen.",
       ],
       [
         "Bitcoin",

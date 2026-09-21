@@ -9,7 +9,7 @@ export type FlowNetwork = "bitcoin" | "ethereum" | "tron" | "solana" | null;
 export const FLOW_ASSETS: FlowAsset[] = ["USDT", "USDC", "BTC"];
 
 export const FLOW_NETWORKS_BY_ASSET: Record<FlowAsset, FlowNetwork[]> = {
-  USDT: ["ethereum"],
+  USDT: ["ethereum", "tron"],
   USDC: ["ethereum"],
   BTC: ["bitcoin"],
 };

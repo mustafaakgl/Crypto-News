@@ -482,11 +482,11 @@ const en = {
     methodology: [
       [
         "What is counted",
-        "USDT and USDC on Ethereum (all ten exchanges) and BTC on Bitcoin (Binance, OKX) moving into and out of each exchange's known wallets. Net flow = inflow − outflow, in the asset's own units; USDT and USDC are USD-pegged.",
+        "USDT and USDC on Ethereum (all ten exchanges), USDT on Tron (the six exchanges Dune labels there: Binance, OKX, Bybit, KuCoin, Gate, Bitget) and BTC on Bitcoin (Binance, OKX) moving into and out of each exchange's known wallets. Net flow = inflow − outflow, in the asset's own units; USDT and USDC are USD-pegged.",
       ],
       [
         "Which wallets",
-        "Dune's exchange address labels (cex.addresses), plus the reserve wallets Binance (audit of 1 Sept 2026) and OKX (snapshot of 11 Aug 2026) publish in their proof of reserves. Checked against those lists, Dune's labels alone covered Binance's BTC 93%, USDT 95%, USDC 57%, and OKX's BTC 54%, USDT 58%, USDC under 1% of the reserve balance; with the published wallets added, those reserve wallets are effectively fully covered. For OKX this mostly moved transfers between its own hot and cold wallets out of inflow/outflow. Every other exchange uses Dune's labels alone and is marked \"unverified\": Coinbase, Upbit and Kraken publish no wallet list to check against, and Bybit shows its current list only to logged-in users. Mining-pool wallets and staking validators are left out.",
+        "Dune's exchange address labels (cex.addresses), plus the reserve wallets Binance (audit of 1 Sept 2026) and OKX (snapshot of 11 Aug 2026) publish in their proof of reserves. Checked against those lists, Dune's labels alone covered Binance's BTC 93%, USDT 95%, USDC 57%, and OKX's BTC 54%, USDT 58%, USDC under 1% of the reserve balance — on Tron, 85% of Binance's USDT and none of OKX's; with the published wallets added, those reserve wallets are effectively fully covered. For OKX this mostly moved transfers between its own hot and cold wallets out of inflow/outflow. Every other exchange uses Dune's labels alone and is marked \"unverified\": Coinbase, Upbit and Kraken publish no wallet list to check against, and Bybit shows its current list only to logged-in users. Mining-pool wallets and staking validators are left out.",
       ],
       [
         "Bitcoin",

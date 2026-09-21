@@ -12,7 +12,7 @@ import {
   DAY_MS,
 } from "../lib/exchangeFlows/flowsMath.ts";
 import type { DailyFlowPoint, ExchangeFlowRow } from "../lib/exchangeFlows/types.ts";
-import { bitcoinFlowsSql, exchangeFlowsSql } from "../lib/exchangeFlows/duneSql.ts";
+import { bitcoinFlowsSql, exchangeFlowsSql, tronUsdtFlowsSql } from "../lib/exchangeFlows/duneSql.ts";
 
 let failures = 0;
 
@@ -125,6 +125,13 @@ function isoDate(daysFromEpoch: number): string {
   assertTrue(btc.includes("('bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h', 'Binance')") && btc.includes("FROM bitcoin.blocks"), "bitcoin query inlines published wallets and reads chain freshness from blocks");
   assertTrue(throws(() => bitcoinFlowsSql("Binance", "2026-09-14", "2026-09-21", [{ address: "1abc' OR 1=1 --", cexName: "Binance" }])), "a malformed Bitcoin address is rejected");
   assertTrue(throws(() => bitcoinFlowsSql("Binance'", "2026-09-14", "2026-09-21")), "a quote in the bitcoin exchange name is rejected");
+  const tron = tronUsdtFlowsSql("2026-09-14", "2026-09-21", [{ address: "TYASr5UV6HEcXatwdFQfmLVUqQQQMUxHLS", cexName: "Binance" }]);
+  assertTrue(
+    tron.includes("from_utf8(address) NOT IN ('TYASr5UV6HEcXatwdFQfmLVUqQQQMUxHLS')") && tron.includes("('TYASr5UV6HEcXatwdFQfmLVUqQQQMUxHLS', 'Binance')"),
+    "tron query lets published wallets replace Dune's label for the same address"
+  );
+  assertTrue(tron.includes("varbinary_substring(from_base58("), "tron base58 labels are decoded to the 20-byte account id");
+  assertTrue(throws(() => tronUsdtFlowsSql("2026-09-14", "2026-09-21", [{ address: "T0' OR 1=1 --", cexName: "Binance" }])), "a malformed Tron address is rejected");
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

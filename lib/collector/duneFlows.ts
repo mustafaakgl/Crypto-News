@@ -1,14 +1,14 @@
 import "server-only";
 import { runDuneSql } from "@/lib/exchangeFlows/duneClient";
-import { bitcoinFlowsSql, DUNE_BITCOIN_VENUES, DUNE_TOKENS, DUNE_TRACKED_VENUES, exchangeFlowsSql } from "@/lib/exchangeFlows/duneSql";
-import { BITCOIN_EXTRA_LABELS, ETHEREUM_EXTRA_LABELS, LABELS_VERSION } from "@/lib/exchangeFlows/porLabels";
+import { bitcoinFlowsSql, DUNE_BITCOIN_VENUES, DUNE_TOKENS, DUNE_TRACKED_VENUES, DUNE_TRON_VENUES, exchangeFlowsSql, tronUsdtFlowsSql } from "@/lib/exchangeFlows/duneSql";
+import { BITCOIN_EXTRA_LABELS, ETHEREUM_EXTRA_LABELS, LABELS_VERSION, TRON_EXTRA_LABELS } from "@/lib/exchangeFlows/porLabels";
 import { dayToIso, getDb, toDay, transaction } from "@/lib/store/db";
 
 const BACKFILL_DAYS = 30;
 // Dune can revise recent transfers; the last few days are re-fetched on every run.
 const REFRESH_DAYS = 3;
 
-export type FlowsNetwork = "ethereum" | "bitcoin";
+export type FlowsNetwork = "ethereum" | "bitcoin" | "tron";
 
 type FlowSource = {
   network: FlowsNetwork;
@@ -32,9 +32,15 @@ const SOURCES: Record<FlowsNetwork, FlowSource> = {
     // Every venue's query gets all published wallets, so transfers between tracked exchanges are recognised.
     queries: (from, to) => DUNE_BITCOIN_VENUES.map((v) => bitcoinFlowsSql(v.duneName, from, to, BITCOIN_EXTRA_LABELS)),
   },
+  tron: {
+    network: "tron",
+    venues: DUNE_TRON_VENUES,
+    assets: ["USDT"],
+    queries: (from, to) => [tronUsdtFlowsSql(from, to, TRON_EXTRA_LABELS)],
+  },
 };
 
-export const FLOW_NETWORKS: FlowsNetwork[] = ["ethereum", "bitcoin"];
+export const FLOW_NETWORKS: FlowsNetwork[] = ["ethereum", "bitcoin", "tron"];
 
 // Labels and tracked venues are part of the key: new reserve wallets or a newly
 // tracked exchange start a fresh backfill instead of mixing coverage.

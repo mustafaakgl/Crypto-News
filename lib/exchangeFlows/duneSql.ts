@@ -24,6 +24,18 @@ export const DUNE_BITCOIN_VENUES = [
   { id: "okx", duneName: "OKX" },
 ] as const;
 
+// Tron: only exchanges Dune labels there at all (2026-09: Binance 16, OKX 15,
+// Bitget 11, Bybit 8, KuCoin 5, Gate 2 addresses; none for Coinbase, Upbit,
+// Kraken or Bitstamp). USDT only — it's the dominant token on Tron.
+export const DUNE_TRON_VENUES = [
+  { id: "binance", duneName: "Binance" },
+  { id: "okx", duneName: "OKX" },
+  { id: "bybit", duneName: "Bybit" },
+  { id: "kucoin", duneName: "KuCoin" },
+  { id: "gate", duneName: "Gate.io" },
+  { id: "bitget", duneName: "Bitget" },
+] as const;
+
 export const DUNE_TOKENS = [
   { asset: "USDT", contract: "0xdac17f958d2ee523a2206206994597c13d831ec7" },
   { asset: "USDC", contract: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" },
@@ -36,6 +48,7 @@ export type ExtraLabel = { address: string; cexName: string };
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const ETH_ADDRESS = /^0x[0-9a-f]{40}$/;
 const BTC_ADDRESS = /^(1|3|bc1)[0-9A-Za-z]{20,90}$/;
+const TRON_ADDRESS = /^T[1-9A-HJ-NP-Za-km-z]{33}$/;
 const CEX_NAME = /^[A-Za-z0-9 .]+$/;
 
 function checkDays(fromDayIso: string, toDayExclusiveIso: string) {
@@ -52,58 +65,45 @@ function checkLabels(labels: ExtraLabel[], pattern: RegExp) {
 // aren't exchange withdrawals, so pool labels are left out entirely.
 const NOT_A_POOL = "coalesce(distinct_name, '') NOT LIKE '% Pool%'";
 
-// One row per (day, exchange, token). Every transfer touching a tracked
-// exchange wallet becomes an "in" leg for the receiving exchange and/or an
-// "out" leg for the sending one; a transfer between two wallets of the SAME
-// exchange is counted once as `internal` and excluded from in/out. `*_cex`
-// columns are transfers whose other side is a different labeled exchange.
-// `data_through` is the newest transfer Dune has ingested in the window, so
-// the caller can tell whether the last day is complete yet.
-export function exchangeFlowsSql(fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = []): string {
-  checkDays(fromDayIso, toDayExclusiveIso);
-  checkLabels(extraLabels, ETH_ADDRESS);
-  const names = DUNE_TRACKED_VENUES.map((v) => `'${v.duneName}'`).join(", ");
-  const contracts = DUNE_TOKENS.map((t) => t.contract).join(", ");
-  const tokenCase = DUNE_TOKENS.map((t) => `WHEN ${t.contract} THEN '${t.asset}'`).join(" ");
-  const extra = extraLabels.map((l) => `(${l.address}, '${l.cexName}')`).join(",\n    ");
-  const labels = extraLabels.length
-    ? `SELECT address, cex_name FROM cex.addresses
-  WHERE blockchain = 'ethereum' AND ${NOT_A_POOL}
-    AND address NOT IN (${extraLabels.map((l) => l.address).join(", ")})
-  UNION ALL
-  SELECT address, cex_name FROM (VALUES
-    ${extra}
-  ) AS v (address, cex_name)`
-    : `SELECT address, cex_name FROM cex.addresses WHERE blockchain = 'ethereum' AND ${NOT_A_POOL}`;
+// Account-based chains (Ethereum, Tron) share one flow query; only the label
+// and transfer sources differ. One row per (day, exchange, asset). Every
+// transfer touching a tracked exchange wallet becomes an "in" leg for the
+// receiving exchange and/or an "out" leg for the sending one; a transfer
+// between two wallets of the SAME exchange is counted once as `internal` and
+// excluded from in/out. `*_cex` columns are transfers whose other side is a
+// different labeled exchange. `data_through` is the newest transfer Dune has
+// ingested from the window start onwards, including after its end: a
+// transfer past midnight proves the previous day is complete, whereas the
+// last transfer inside a day can land seconds before midnight (Tron's 3s,
+// Ethereum's 12s blocks), which would wrongly leave that day "incomplete".
+function accountFlowsSql(labels: string, transfers: string, freshness: string, venues: readonly { duneName: string }[]): string {
+  const names = venues.map((v) => `'${v.duneName}'`).join(", ");
   return `
 WITH labels AS (
   ${labels}
 ),
 t AS (
-  SELECT block_date, block_time, contract_address, "from", "to", amount
-  FROM tokens.transfers
-  WHERE blockchain = 'ethereum'
-    AND block_date >= DATE '${fromDayIso}'
-    AND block_date < DATE '${toDayExclusiveIso}'
-    AND contract_address IN (${contracts})
+  ${transfers}
 ),
-freshness AS (SELECT max(block_time) AS data_through FROM t),
+freshness AS (
+  ${freshness}
+),
 tagged AS (
-  SELECT t.block_date, t.contract_address, t.amount, f.cex_name AS from_cex, x.cex_name AS to_cex
+  SELECT t.block_date, t.asset, t.amount, f.cex_name AS from_cex, x.cex_name AS to_cex
   FROM t
   LEFT JOIN labels f ON t."from" = f.address
   LEFT JOIN labels x ON t."to" = x.address
   WHERE f.cex_name IN (${names}) OR x.cex_name IN (${names})
 ),
 legs AS (
-  SELECT block_date, contract_address, to_cex AS cex, 'in' AS dir, from_cex AS other, amount FROM tagged WHERE to_cex IN (${names})
+  SELECT block_date, asset, to_cex AS cex, 'in' AS dir, from_cex AS other, amount FROM tagged WHERE to_cex IN (${names})
   UNION ALL
-  SELECT block_date, contract_address, from_cex AS cex, 'out' AS dir, to_cex AS other, amount FROM tagged WHERE from_cex IN (${names})
+  SELECT block_date, asset, from_cex AS cex, 'out' AS dir, to_cex AS other, amount FROM tagged WHERE from_cex IN (${names})
 )
 SELECT
   CAST(block_date AS VARCHAR) AS day,
   cex,
-  CASE contract_address ${tokenCase} END AS asset,
+  asset,
   sum(CASE WHEN dir = 'in' AND other IS NULL THEN amount ELSE 0 END) AS inflow_ext,
   sum(CASE WHEN dir = 'in' AND other IS NOT NULL AND other <> cex THEN amount ELSE 0 END) AS inflow_cex,
   sum(CASE WHEN dir = 'out' AND other IS NULL THEN amount ELSE 0 END) AS outflow_ext,
@@ -115,6 +115,56 @@ FROM legs CROSS JOIN freshness
 GROUP BY 1, 2, 3
 ORDER BY 1, 2, 3
 `.trim();
+}
+
+export function exchangeFlowsSql(fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = []): string {
+  checkDays(fromDayIso, toDayExclusiveIso);
+  checkLabels(extraLabels, ETH_ADDRESS);
+  const contracts = DUNE_TOKENS.map((t) => t.contract).join(", ");
+  const tokenCase = DUNE_TOKENS.map((t) => `WHEN ${t.contract} THEN '${t.asset}'`).join(" ");
+  const labels = extraLabels.length
+    ? `SELECT address, cex_name FROM cex.addresses
+  WHERE blockchain = 'ethereum' AND ${NOT_A_POOL}
+    AND address NOT IN (${extraLabels.map((l) => l.address).join(", ")})
+  UNION ALL
+  SELECT address, cex_name FROM (VALUES
+    ${extraLabels.map((l) => `(${l.address}, '${l.cexName}')`).join(",\n    ")}
+  ) AS v (address, cex_name)`
+    : `SELECT address, cex_name FROM cex.addresses WHERE blockchain = 'ethereum' AND ${NOT_A_POOL}`;
+  const transfers = `SELECT block_date, block_time, CASE contract_address ${tokenCase} END AS asset, "from", "to", amount
+  FROM tokens.transfers
+  WHERE blockchain = 'ethereum'
+    AND block_date >= DATE '${fromDayIso}'
+    AND block_date < DATE '${toDayExclusiveIso}'
+    AND contract_address IN (${contracts})`;
+  const freshness = `SELECT max(block_time) AS data_through FROM tokens.transfers
+  WHERE blockchain = 'ethereum' AND block_date >= DATE '${fromDayIso}' AND contract_address IN (${contracts})`;
+  return accountFlowsSql(labels, transfers, freshness, DUNE_TRACKED_VENUES);
+}
+
+// Tron labels in Dune are base58 "T…" strings stored as bytes, while transfer
+// events use the 20-byte account id; from_base58 gives 0x41 + id + checksum.
+const TRON_ID = (b58: string) => `varbinary_substring(from_base58(${b58}), 2, 20)`;
+
+export function tronUsdtFlowsSql(fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = []): string {
+  checkDays(fromDayIso, toDayExclusiveIso);
+  checkLabels(extraLabels, TRON_ADDRESS);
+  const labels = extraLabels.length
+    ? `SELECT ${TRON_ID("from_utf8(address)")} AS address, cex_name FROM cex.addresses
+  WHERE blockchain = 'tron' AND ${NOT_A_POOL}
+    AND from_utf8(address) NOT IN (${extraLabels.map((l) => `'${l.address}'`).join(", ")})
+  UNION ALL
+  SELECT ${TRON_ID("b58")} AS address, cex_name FROM (VALUES
+    ${extraLabels.map((l) => `('${l.address}', '${l.cexName}')`).join(",\n    ")}
+  ) AS v (b58, cex_name)`
+    : `SELECT ${TRON_ID("from_utf8(address)")} AS address, cex_name FROM cex.addresses WHERE blockchain = 'tron' AND ${NOT_A_POOL}`;
+  const transfers = `SELECT CAST(evt_block_time AS DATE) AS block_date, evt_block_time AS block_time, 'USDT' AS asset, "from", "to", CAST(value AS DOUBLE) / 1e6 AS amount
+  FROM tether_tron.tether_usd_evt_transfer
+  WHERE evt_block_time >= TIMESTAMP '${fromDayIso} 00:00:00 UTC'
+    AND evt_block_time < TIMESTAMP '${toDayExclusiveIso} 00:00:00 UTC'`;
+  const freshness = `SELECT max(evt_block_time) AS data_through FROM tether_tron.tether_usd_evt_transfer
+  WHERE evt_block_time >= TIMESTAMP '${fromDayIso} 00:00:00 UTC'`;
+  return accountFlowsSql(labels, transfers, freshness, DUNE_TRON_VENUES);
 }
 
 // Bitcoin is UTXO-based, so flows are judged per transaction for one exchange:
