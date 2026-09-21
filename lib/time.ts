@@ -19,6 +19,10 @@ export function clockTime(iso: string): string {
   });
 }
 
+export function clockTimeWithSeconds(ms: number): string {
+  return new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: TIME_ZONE });
+}
+
 // Disambiguates timestamps that can land on different calendar days
 // (e.g. a 24h window), where clockTime() alone would show the same HH:MM twice.
 export function dateTime(iso: string): string {
