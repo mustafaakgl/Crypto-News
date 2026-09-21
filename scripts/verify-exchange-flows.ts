@@ -132,6 +132,15 @@ function isoDate(daysFromEpoch: number): string {
   );
   assertTrue(tron.includes("varbinary_substring(from_base58("), "tron base58 labels are decoded to the 20-byte account id");
   assertTrue(throws(() => tronUsdtFlowsSql("2026-09-14", "2026-09-21", [{ address: "T0' OR 1=1 --", cexName: "Binance" }])), "a malformed Tron address is rejected");
+  // The freshness scan is the only clause that puts the window end right before the contract filter.
+  const ethBound = (end: string) => `block_date < DATE '${end}' AND contract_address`;
+  assertTrue(!exchangeFlowsSql("2026-09-14", "2026-09-21").includes(ethBound("2026-09-21")), "recent runs read freshness past the window end");
+  assertTrue(exchangeFlowsSql("2025-09-14", "2025-10-14", [], false).includes(ethBound("2025-10-14")), "history chunks bound the ethereum freshness scan");
+  assertTrue(
+    tronUsdtFlowsSql("2025-09-14", "2025-10-14", [], false).includes("TIMESTAMP '2025-09-14 00:00:00 UTC' AND evt_block_time < TIMESTAMP '2025-10-14 00:00:00 UTC'"),
+    "history chunks bound the tron freshness scan"
+  );
+  assertTrue(bitcoinFlowsSql("Binance", "2025-09-14", "2025-10-14", [], false).includes("date >= DATE '2025-09-14' AND date < DATE '2025-10-14')"), "history chunks bound the bitcoin freshness scan");
 }
 
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILURE(S)`);

@@ -478,6 +478,7 @@ const en = {
     dailyError: "Could not load a daily breakdown for this exchange right now.",
     dailyEmpty: "No daily breakdown available for this exchange.",
     colDateUtc: "Date (UTC)",
+    colMonthUtc: "Month (UTC)",
     howToReadThis: "How to read this",
     methodology: [
       [

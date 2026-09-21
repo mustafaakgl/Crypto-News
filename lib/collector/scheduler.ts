@@ -1,7 +1,7 @@
 import "server-only";
 import { collectVenueDaily } from "@/lib/collector/cexDaily";
 import { collectDexCandles } from "@/lib/collector/dexCandles";
-import { collectDuneFlows, FLOW_NETWORKS, flowsCollectionDue, flowsSourceKey, type FlowsNetwork } from "@/lib/collector/duneFlows";
+import { collectDuneFlows, collectDuneFlowsHistory, FLOW_NETWORKS, flowsCollectionDue, flowsHistoryPending, flowsSourceKey, type FlowsNetwork } from "@/lib/collector/duneFlows";
 import { duneConfigured } from "@/lib/exchangeFlows/duneClient";
 import { CEX_VENUES, type CexVenueId } from "@/lib/exchangeVolume/venues";
 import { getDb, toDay } from "@/lib/store/db";
@@ -71,6 +71,16 @@ function flowsDue(network: FlowsNetwork, nowMs: number): boolean {
   return !last || nowMs - last.started_at > 60 * 60 * 1000;
 }
 
+// Once the recent days are current, older history is filled in one chunk per
+// tick; after a failed run it waits an hour rather than spending credits on retries.
+function flowsHistoryDue(network: FlowsNetwork, nowMs: number): boolean {
+  if (!duneConfigured() || flowsCollectionDue(network, nowMs) || !flowsHistoryPending(network)) return false;
+  const lastError = getDb()
+    .prepare("SELECT started_at FROM collection_runs WHERE job = 'dune_flows_history' AND target = ? AND status = 'error' AND coalesce(detail, '') != ? ORDER BY started_at DESC LIMIT 1")
+    .get(flowsSourceKey(network), INTERRUPTED) as { started_at: number } | undefined;
+  return !lastError || nowMs - lastError.started_at > 60 * 60 * 1000;
+}
+
 function tick() {
   const nowMs = Date.now();
   for (const venue of CEX_VENUES) {
@@ -89,7 +99,23 @@ function tick() {
     });
   }
   for (const network of FLOW_NETWORKS) {
-    if (!flowsDue(network, nowMs)) continue;
+    if (!flowsDue(network, nowMs)) {
+      if (flowsHistoryDue(network, nowMs)) {
+        void runExclusive(`dune_flows:${network}`, async () => {
+          const id = startRun("dune_flows_history", flowsSourceKey(network));
+          try {
+            const r = await collectDuneFlowsHistory(network);
+            const detail = r ? `credits=${r.credits.toFixed(3)} from=${r.fromDay} through=${r.completeThrough} executions=${r.executions.join(",")}` : "nothing to fill";
+            finishRun(id, "ok", r?.rowsWritten ?? 0, 0, r?.rowsWritten ?? 0, detail);
+            console.log(`[collector] dune flows history ${network}: ${detail}`);
+          } catch (err) {
+            finishRun(id, "error", 0, 0, 0, err instanceof Error ? err.message : String(err));
+            throw err;
+          }
+        });
+      }
+      continue;
+    }
     void runExclusive(`dune_flows:${network}`, async () => {
       // Target is the source key, so a new label version isn't held back by the old one's retry window.
       const id = startRun("dune_flows", flowsSourceKey(network));

@@ -79,6 +79,8 @@ const NOT_A_POOL = "coalesce(distinct_name, '') NOT LIKE '% Pool%'";
 // transfer past midnight proves the previous day is complete, whereas the
 // last transfer inside a day can land seconds before midnight (Tron's 3s,
 // Ethereum's 12s blocks), which would wrongly leave that day "incomplete".
+// History backfills (`openEnded` false) cover long-finished days, so their
+// freshness scan stops at the window end instead of reading up to today.
 function accountFlowsSql(labels: string, transfers: string, freshness: string, venues: readonly { duneName: string }[]): string {
   const names = venues.map((v) => `'${v.duneName}'`).join(", ");
   return `
@@ -120,7 +122,7 @@ ORDER BY 1, 2, 3
 `.trim();
 }
 
-export function exchangeFlowsSql(fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = []): string {
+export function exchangeFlowsSql(fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = [], openEnded = true): string {
   checkDays(fromDayIso, toDayExclusiveIso);
   checkLabels(extraLabels, ETH_ADDRESS);
   const contracts = DUNE_TOKENS.map((t) => t.contract).join(", ");
@@ -141,7 +143,7 @@ export function exchangeFlowsSql(fromDayIso: string, toDayExclusiveIso: string, 
     AND block_date < DATE '${toDayExclusiveIso}'
     AND contract_address IN (${contracts})`;
   const freshness = `SELECT max(block_time) AS data_through FROM tokens.transfers
-  WHERE blockchain = 'ethereum' AND block_date >= DATE '${fromDayIso}' AND contract_address IN (${contracts})`;
+  WHERE blockchain = 'ethereum' AND block_date >= DATE '${fromDayIso}'${openEnded ? "" : ` AND block_date < DATE '${toDayExclusiveIso}'`} AND contract_address IN (${contracts})`;
   return accountFlowsSql(labels, transfers, freshness, DUNE_TRACKED_VENUES);
 }
 
@@ -149,7 +151,7 @@ export function exchangeFlowsSql(fromDayIso: string, toDayExclusiveIso: string, 
 // events use the 20-byte account id; from_base58 gives 0x41 + id + checksum.
 const TRON_ID = (b58: string) => `varbinary_substring(from_base58(${b58}), 2, 20)`;
 
-export function tronUsdtFlowsSql(fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = []): string {
+export function tronUsdtFlowsSql(fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = [], openEnded = true): string {
   checkDays(fromDayIso, toDayExclusiveIso);
   checkLabels(extraLabels, TRON_ADDRESS);
   const labels = extraLabels.length
@@ -166,7 +168,7 @@ export function tronUsdtFlowsSql(fromDayIso: string, toDayExclusiveIso: string, 
   WHERE evt_block_time >= TIMESTAMP '${fromDayIso} 00:00:00 UTC'
     AND evt_block_time < TIMESTAMP '${toDayExclusiveIso} 00:00:00 UTC'`;
   const freshness = `SELECT max(evt_block_time) AS data_through FROM tether_tron.tether_usd_evt_transfer
-  WHERE evt_block_time >= TIMESTAMP '${fromDayIso} 00:00:00 UTC'`;
+  WHERE evt_block_time >= TIMESTAMP '${fromDayIso} 00:00:00 UTC'${openEnded ? "" : ` AND evt_block_time < TIMESTAMP '${toDayExclusiveIso} 00:00:00 UTC'`}`;
   return accountFlowsSql(labels, transfers, freshness, DUNE_TRON_VENUES);
 }
 
@@ -178,7 +180,7 @@ export function tronUsdtFlowsSql(fromDayIso: string, toDayExclusiveIso: string, 
 //     the exchange (change, own-wallet moves) are internal and excluded.
 // `data_through` is the newest block Dune has, so a day counts as complete
 // only once the chain has moved past its midnight.
-export function bitcoinFlowsSql(duneName: string, fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = []): string {
+export function bitcoinFlowsSql(duneName: string, fromDayIso: string, toDayExclusiveIso: string, extraLabels: ExtraLabel[] = [], openEnded = true): string {
   checkDays(fromDayIso, toDayExclusiveIso);
   checkLabels(extraLabels, BTC_ADDRESS);
   if (!CEX_NAME.test(duneName)) throw new Error("invalid exchange name");
@@ -224,7 +226,7 @@ outs AS (
   WHERE ${inRange("o")}
   GROUP BY o.tx_id
 ),
-freshness AS (SELECT max(time) AS data_through FROM bitcoin.blocks WHERE date >= DATE '${fromDayIso}')
+freshness AS (SELECT max(time) AS data_through FROM bitcoin.blocks WHERE date >= DATE '${fromDayIso}'${openEnded ? "" : ` AND date < DATE '${toDayExclusiveIso}'`})
 SELECT
   CAST(o.day AS VARCHAR) AS day,
   '${duneName}' AS cex,

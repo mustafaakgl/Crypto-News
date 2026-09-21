@@ -480,6 +480,7 @@ const de = {
     dailyError: "Die tägliche Aufschlüsselung für diese Börse konnte gerade nicht geladen werden.",
     dailyEmpty: "Für diese Börse ist keine tägliche Aufschlüsselung verfügbar.",
     colDateUtc: "Datum (UTC)",
+    colMonthUtc: "Monat (UTC)",
     howToReadThis: "So liest man das",
     methodology: [
       [

@@ -3,11 +3,24 @@
 import { useEffect, useRef, useState } from "react";
 import type { ExchangePeriod, VenueCount } from "@/lib/exchangeAnalytics/types";
 import { FLOW_ASSETS, FLOW_NETWORKS_BY_ASSET } from "@/lib/exchangeFlows/types";
-import type { ExchangeFlowRow, ExchangeFlowsResult, ExchangeFlowDailySeries, FlowAsset, FlowNetwork } from "@/lib/exchangeFlows/types";
+import type { DailyFlowPoint, ExchangeFlowRow, ExchangeFlowsResult, ExchangeFlowDailySeries, FlowAsset, FlowNetwork } from "@/lib/exchangeFlows/types";
 import { formatCompactQuantity } from "@/lib/format";
 import { dateTime, utcDateTime } from "@/lib/time";
 import type { Locale } from "@/lib/i18n/locale";
 import { getDictionary } from "@/lib/i18n/getDictionary";
+
+// A year of daily rows is unreadable, so 1Y sums them per UTC month; a
+// month with any missing day stays null rather than showing a partial sum.
+function groupByMonth(points: DailyFlowPoint[]): DailyFlowPoint[] {
+  const months = new Map<string, DailyFlowPoint>();
+  for (const p of points) {
+    const key = p.dateIso.slice(0, 7);
+    const m = months.get(key);
+    const add = (a: number | null, b: number | null) => (a === null || b === null ? null : a + b);
+    months.set(key, m ? { dateIso: key, inflow: add(m.inflow, p.inflow), outflow: add(m.outflow, p.outflow), netflow: add(m.netflow, p.netflow) } : { ...p, dateIso: key });
+  }
+  return [...months.values()];
+}
 
 function useFlowsOverview(asset: FlowAsset, network: FlowNetwork, period: ExchangePeriod, count: VenueCount) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -252,7 +265,7 @@ export function FlowsTab({
                   <thead>
                     <tr className="text-left text-[10px] uppercase tracking-wide text-ink/40 border-b border-rule/60">
                       <th scope="col" className="py-1 pr-2 font-normal">
-                        {t.colDateUtc}
+                        {period === "1y" ? t.colMonthUtc : t.colDateUtc}
                       </th>
                       <th scope="col" className="py-1 pr-2 font-normal text-right">
                         {t.colInflow}
@@ -266,7 +279,7 @@ export function FlowsTab({
                     </tr>
                   </thead>
                   <tbody>
-                    {daily.series.points.map((p) => (
+                    {(period === "1y" ? groupByMonth(daily.series.points) : daily.series.points).map((p) => (
                       <tr key={p.dateIso} className="border-b border-rule/60">
                         <td className="py-1 pr-2">{p.dateIso}</td>
                         <td className="py-1 pr-2 text-right tabular-nums">{qty(p.inflow)}</td>

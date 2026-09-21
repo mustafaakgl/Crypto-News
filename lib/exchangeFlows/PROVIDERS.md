@@ -118,3 +118,12 @@ encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).
    way, then add them to `DUNE_BITCOIN_VENUES`.
 3. 1Y: the collector backfills 30 days; extend `BACKFILL_DAYS` once the
    credit cost of a longer window has been measured.
+
+## 1Y history
+
+The collector first keeps the recent 30 days current, then fills older days
+backwards in 30-day chunks (one chunk per network per 10-minute tick) until the
+1Y window is covered. `FLOWS_HISTORY_DAYS` (max 365) caps it. Measured
+2026-09-21: a 10-day chunk cost Ethereum 0.55, Tron 0.52 and Bitcoin 25.9
+credits. Bitcoin's cost doesn't scale with the days (30 days: 13–20), so a full
+year is roughly Ethereum 7–20, Tron 6–15 and Bitcoin 150–290 credits, once.
