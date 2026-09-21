@@ -4,7 +4,7 @@ import { getResearch } from "@/lib/research";
 import { buildBriefing } from "@/lib/briefing";
 import { CryptoStocksTabs } from "@/components/CryptoStocksTabs";
 import { TopPricesTable } from "@/components/TopPricesTable";
-import { FeaturedStory } from "@/components/FeaturedStory";
+import { TopStories } from "@/components/TopStories";
 import { NewsListItem } from "@/components/NewsListItem";
 import { AgendaItem } from "@/components/AgendaItem";
 import { BriefingCard } from "@/components/BriefingCard";
@@ -25,9 +25,11 @@ export async function HomePageContent({ locale }: { locale: Locale }) {
   const topTenAssets = pickTopAssets(prices, 10); // same fetched result, no extra request
   const briefing = buildBriefing(news.items);
 
-  const [featured, ...rest] = news.items;
-  const latest = rest.slice(0, 6);
-  const agenda = rest.slice(6, 11);
+  // The top block shows up to 11 stories (1 lead + 4 side + 6 cards); the
+  // columns below continue from there so nothing appears twice unfiltered.
+  const TOP_COUNT = 11;
+  const latest = news.items.slice(TOP_COUNT, TOP_COUNT + 6);
+  const agenda = news.items.slice(TOP_COUNT + 6, TOP_COUNT + 11);
 
   return (
     <div className="min-h-screen bg-paper">
@@ -40,9 +42,11 @@ export async function HomePageContent({ locale }: { locale: Locale }) {
       )}
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {!featured ? (
+        {news.items.length === 0 ? (
           <p className="border border-ink/20 px-4 py-8 text-center text-ink/60">{t.newsUnavailable}</p>
         ) : (
+          <>
+          <TopStories items={news.items} />
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.3fr_1fr] gap-8">
             <section aria-label={t.ariaLatestNews}>
               <div className="flex items-baseline justify-between border-b-2 border-ink pb-2 mb-1">
@@ -63,10 +67,7 @@ export async function HomePageContent({ locale }: { locale: Locale }) {
 
             <section aria-label={t.ariaFeaturedAndPrices} className="space-y-6">
               <CryptoStocksTabs assets={homepageAssets} asOf={prices.asOf} error={prices.error} />
-              <div>
-                <h2 className="font-serif text-sm font-700 uppercase tracking-widest border-b-2 border-ink pb-2 mb-3">{t.featured}</h2>
-                <FeaturedStory item={featured} />
-              </div>
+              <BriefingCard briefing={briefing} />
             </section>
 
             <section aria-label={t.ariaAgendaAndPanels} className="space-y-6">
@@ -83,10 +84,10 @@ export async function HomePageContent({ locale }: { locale: Locale }) {
                 )}
               </div>
 
-              <BriefingCard briefing={briefing} />
               <ResearchPanel research={research} locale={locale} />
             </section>
           </div>
+          </>
         )}
 
         <TopPricesTable assets={topTenAssets} asOf={prices.asOf} error={prices.error} locale={locale} />

@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Modal } from "@/components/Modal";
 import { SaveButton } from "@/components/SaveButton";
+import { PublisherImage } from "@/components/PublisherImage";
 import { NewsInsights } from "@/components/NewsInsights";
 import { useNewsInteraction } from "@/components/NewsInteractionContext";
 import { relativeTime, clockTime } from "@/lib/time";
@@ -66,9 +66,10 @@ export function NewsDetailDialog() {
               </div>
             )}
 
-            {detailItem.imageRightsVerified && detailItem.imageUrl && (
-              <div className="relative w-full aspect-[16/10] bg-ink overflow-hidden">
-                <Image src={detailItem.imageUrl} alt="" fill sizes="576px" className="object-cover" />
+            {detailItem.showPublisherImage && detailItem.imageUrl && (
+              <div className="relative w-full aspect-video bg-ink overflow-hidden">
+                <PublisherImage item={detailItem} width={800} />
+                <span className="absolute bottom-1 right-1 bg-ink/60 px-1 text-[9px] text-white">{detailItem.sourceName}</span>
               </div>
             )}
 

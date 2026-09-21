@@ -11,10 +11,12 @@ export type NewsItem = {
   author: string | null; // from the feed's own dc:creator field(s), when present
   publishedAt: string; // ISO
   imageUrl: string | null;
-  // Presence of a media:content/enclosure tag in an RSS feed is not, by itself,
-  // permission to republish the image — only sources with a confirmed reuse
-  // license should set this to true. Everyone else falls back to the local cover.
-  imageRightsVerified: boolean;
+  // An image in an RSS feed is not, by itself, a licence to republish it. The
+  // site owner chose (2026-09-21) to show publishers' own images anyway,
+  // loaded straight from the publisher's server with the source named and
+  // linked — never copied or re-hosted here — and accepts the takedown risk.
+  showPublisherImage: boolean;
+  category: string | null; // the publisher's own section, e.g. "Markets"
   assets: string[]; // detected related tickers, e.g. ["BTC"]
 };
 
@@ -28,7 +30,7 @@ type FeedConfig = {
   id: string;
   sourceName: string;
   url: string;
-  imageRightsVerified: boolean;
+  showPublisherImages: boolean;
 };
 
 const FEEDS: FeedConfig[] = [
@@ -36,13 +38,13 @@ const FEEDS: FeedConfig[] = [
     id: "coindesk",
     sourceName: "CoinDesk",
     url: "https://www.coindesk.com/arc/outboundfeeds/rss/",
-    imageRightsVerified: false,
+    showPublisherImages: true,
   },
   {
     id: "decrypt",
     sourceName: "Decrypt",
     url: "https://decrypt.co/feed",
-    imageRightsVerified: false,
+    showPublisherImages: true,
   },
 ];
 
@@ -87,6 +89,16 @@ function firstUrlFrom(value: unknown): string | null {
   return null;
 }
 
+// Publishers tag every item with a generic "News" too; the first specific
+// section is the useful one. Decrypt also tags coins in lowercase ("zcash").
+function extractCategory(item: Record<string, unknown>): string | null {
+  const raw = item["category"];
+  const names = (Array.isArray(raw) ? raw : raw == null ? [] : [raw]).map((v) => stripHtml(asText(v)).trim()).filter(Boolean);
+  const name = names.find((n) => n.toLowerCase() !== "news");
+  if (!name) return null;
+  return name === name.toLowerCase() ? name.charAt(0).toUpperCase() + name.slice(1) : name;
+}
+
 function extractAuthor(item: Record<string, unknown>): string | null {
   const raw = item["dc:creator"];
   if (raw == null) return null;
@@ -94,15 +106,17 @@ function extractAuthor(item: Record<string, unknown>): string | null {
   return names.length > 0 ? Array.from(new Set(names)).join(", ") : null;
 }
 
+// Decrypt's enclosure is a resizable image-proxy URL while its media:thumbnail
+// is the multi-megapixel original, so the enclosure is tried first.
 function extractImage(item: Record<string, unknown>): string | null {
   return (
-    firstUrlFrom(item["media:content"]) ??
-    firstUrlFrom(item["media:thumbnail"]) ??
     (() => {
       const enclosure = item["enclosure"] as Record<string, unknown> | undefined;
       const url = enclosure?.["@_url"];
       return typeof url === "string" && url.startsWith("http") ? url : null;
-    })()
+    })() ??
+    firstUrlFrom(item["media:content"]) ??
+    firstUrlFrom(item["media:thumbnail"])
   );
 }
 
@@ -138,7 +152,8 @@ async function fetchFeed(feed: FeedConfig): Promise<NewsItem[]> {
       author: extractAuthor(item),
       publishedAt,
       imageUrl: extractImage(item),
-      imageRightsVerified: feed.imageRightsVerified,
+      showPublisherImage: feed.showPublisherImages,
+      category: extractCategory(item),
       assets: detectAssets(`${title} ${description}`),
     };
   });
