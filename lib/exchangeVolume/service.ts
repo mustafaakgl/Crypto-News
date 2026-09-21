@@ -1,7 +1,7 @@
 import "server-only";
 import { fetchJson } from "@/lib/httpClient";
 import { TtlCache, type StaleAwareResult } from "@/lib/rag/cache";
-import { ADAPTERS } from "@/lib/exchangeVolume/adapters";
+import { ADAPTERS, getVenuePairs } from "@/lib/exchangeVolume/adapters";
 import { aggregateAllPeriods, BASE_ASSETS, DAY_MS, HISTORY_DAYS, utcDayStart } from "@/lib/exchangeVolume/aggregate";
 import { CEX_VENUES, type CexVenueId } from "@/lib/exchangeVolume/venues";
 import type { BaseAsset, PairHistory, PairRef, ReferencePrices, VenueVolumeResult } from "@/lib/exchangeVolume/types";
@@ -11,11 +11,9 @@ import type { BaseAsset, PairHistory, PairRef, ReferencePrices, VenueVolumeResul
 // day while a refresh runs.
 const RESULT_TTL_MS = 60 * 60 * 1000;
 const RESULT_STALE_TTL_MS = 24 * 60 * 60 * 1000;
-const PAIR_LIST_TTL_MS = 24 * 60 * 60 * 1000;
 
 const KRAKEN_USD_PAIR: Record<BaseAsset, string> = { BTC: "XBTUSD", ETH: "ETHUSD", SOL: "SOLUSD", XRP: "XRPUSD" };
 
-const pairListCache = new TtlCache<PairRef[]>();
 const priceCache = new TtlCache<ReferencePrices>();
 const venueCache = new TtlCache<VenueVolumeResult>();
 
@@ -60,14 +58,6 @@ async function getReferencePrices(): Promise<ReferencePrices> {
   return value;
 }
 
-async function getPairs(venueId: CexVenueId): Promise<PairRef[]> {
-  const cached = pairListCache.get(venueId);
-  if (cached) return cached;
-  const pairs = await ADAPTERS[venueId].listPairs();
-  if (pairs.length > 0) pairListCache.set(venueId, pairs, PAIR_LIST_TTL_MS);
-  return pairs;
-}
-
 const label = (p: PairRef) => `${p.base}/${p.quote}`;
 
 async function computeVenueVolume(venueId: CexVenueId): Promise<VenueVolumeResult> {
@@ -79,14 +69,14 @@ async function computeVenueVolume(venueId: CexVenueId): Promise<VenueVolumeResul
 
   let pairs: PairRef[];
   try {
-    pairs = await getPairs(venueId);
+    pairs = await getVenuePairs(venueId);
   } catch (err) {
     return { ...base, status: "error", periods: null, pairs: [], pairsFailed: [], warnings: [`${venue.name}: ${err instanceof Error ? err.message : "pair list unavailable"}`] };
   }
 
   const [prices, settled] = await Promise.all([
     getReferencePrices(),
-    Promise.allSettled(pairs.map((p) => adapter.fetchDaily(p.symbol, sinceMs, nowMs))),
+    Promise.allSettled(pairs.map((p) => adapter.fetchCandles(p.symbol, "1d", sinceMs, nowMs))),
   ]);
 
   const histories: PairHistory[] = [];

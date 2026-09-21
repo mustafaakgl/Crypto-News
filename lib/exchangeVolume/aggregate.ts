@@ -74,11 +74,11 @@ export function aggregatePeriod(pairs: PairHistory[], prices: ReferencePrices, d
   for (const pair of pairs) {
     const inWindow = new Map<number, number>();
     for (const c of pair.candles) {
-      if (c.dayStartMs >= windowStart && c.dayStartMs < windowEnd) {
-        inWindow.set(c.dayStartMs, (inWindow.get(c.dayStartMs) ?? 0) + c.baseVolume);
+      if (c.startMs >= windowStart && c.startMs < windowEnd) {
+        inWindow.set(c.startMs, (inWindow.get(c.startMs) ?? 0) + c.baseVolume);
       }
     }
-    const earliest = pair.candles.reduce((min, c) => Math.min(min, c.dayStartMs), Infinity);
+    const earliest = pair.candles.reduce((min, c) => Math.min(min, c.startMs), Infinity);
     if (earliest > windowStart) pairsWithShortHistory++;
     const expectedFrom = Math.max(windowStart, earliest);
     const expectedDays = expectedFrom < windowEnd ? (windowEnd - expectedFrom) / DAY_MS : 0;

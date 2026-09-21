@@ -7,10 +7,12 @@ export type QuoteType = "fiat" | "stablecoin" | "crypto";
 
 export type PairRef = { base: BaseAsset; quote: QuoteCurrency; symbol: string };
 
-// dayStartMs is always 00:00 UTC of the day the candle covers.
-export type DailyCandle = { dayStartMs: number; baseVolume: number };
+export type CandleResolution = "1h" | "1d";
 
-export type PairHistory = PairRef & { candles: DailyCandle[] };
+// startMs is the UTC start of the bucket (00:00 UTC for daily candles).
+export type Candle = { startMs: number; close: number; baseVolume: number };
+
+export type PairHistory = PairRef & { candles: Candle[] };
 
 // base asset -> (dayStartMs -> USD price)
 export type ReferencePrices = Partial<Record<BaseAsset, Map<number, number>>>;

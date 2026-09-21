@@ -51,10 +51,10 @@ const pairs: PairHistory[] = [
     quote: "USDT",
     symbol: "BTCUSDT",
     candles: [
-      { dayStartMs: day(3), baseVolume: 1 },
-      { dayStartMs: day(2), baseVolume: 2 },
-      { dayStartMs: day(1), baseVolume: 3 },
-      { dayStartMs: today, baseVolume: 50 },
+      { startMs: day(3), close: 1, baseVolume: 1 },
+      { startMs: day(2), close: 1, baseVolume: 2 },
+      { startMs: day(1), close: 1, baseVolume: 3 },
+      { startMs: today, close: 1, baseVolume: 50 },
     ],
   },
   {
@@ -62,8 +62,8 @@ const pairs: PairHistory[] = [
     quote: "EUR",
     symbol: "BTCEUR",
     candles: [
-      { dayStartMs: day(2), baseVolume: 1 },
-      { dayStartMs: day(1), baseVolume: 1 },
+      { startMs: day(2), close: 1, baseVolume: 1 },
+      { startMs: day(1), close: 1, baseVolume: 1 },
     ],
   },
   {
@@ -71,8 +71,8 @@ const pairs: PairHistory[] = [
     quote: "BTC",
     symbol: "ETHBTC",
     candles: [
-      { dayStartMs: day(3), baseVolume: 4 }, // no ETH price that day
-      { dayStartMs: day(1), baseVolume: 5 }, // day(2) missing -> a gap
+      { startMs: day(3), close: 1, baseVolume: 4 }, // no ETH price that day
+      { startMs: day(1), close: 1, baseVolume: 5 }, // day(2) missing -> a gap
     ],
   },
 ];

@@ -1,20 +1,24 @@
 import "server-only";
 import { fetchJson, type PacedOptions } from "@/lib/httpClient";
-import { DAY_MS, toTrackedPair } from "@/lib/exchangeVolume/aggregate";
-import type { DailyCandle, PairRef } from "@/lib/exchangeVolume/types";
+import { toTrackedPair } from "@/lib/exchangeVolume/aggregate";
+import { TtlCache } from "@/lib/rag/cache";
+import type { Candle, CandleResolution, PairRef } from "@/lib/exchangeVolume/types";
 import type { CexVenueId } from "@/lib/exchangeVolume/venues";
 
 export type VenueAdapter = {
   pace: PacedOptions;
   listPairs(): Promise<PairRef[]>;
-  // Candles from sinceMs onwards (UTC-day aligned); may include today's in-progress day.
-  fetchDaily(symbol: string, sinceMs: number, nowMs: number): Promise<DailyCandle[]>;
+  // Candles whose start is at or after sinceMs, UTC-aligned; may include the in-progress bucket.
+  fetchCandles(symbol: string, resolution: CandleResolution, sinceMs: number, nowMs: number): Promise<Candle[]>;
 };
 
+export const RESOLUTION_MS: Record<CandleResolution, number> = { "1h": 3_600_000, "1d": 86_400_000 };
+
 // Instrument lists can be several MB — too large for Next's fetch cache — so
-// they're fetched uncached here and cached in memory by the caller instead.
+// they're fetched uncached here and cached in memory instead.
 const LIST_REVALIDATE = 0;
-const CANDLE_REVALIDATE = 3600;
+const CANDLE_REVALIDATE: Record<CandleResolution, number> = { "1h": 300, "1d": 3600 };
+const PAIR_LIST_TTL_MS = 24 * 60 * 60 * 1000;
 
 class AdapterError extends Error {}
 
@@ -51,20 +55,42 @@ function pairsFrom<T>(items: T[], pick: (item: T) => { base: string; quote: stri
   return out;
 }
 
-// Row arrays of [timestamp, ...] where the timestamp unit and base-volume
-// column differ per exchange.
-function candlesFromRows(rows: unknown[], tsIndex: number, tsUnit: "ms" | "s", volIndex: number): DailyCandle[] {
+// Row arrays of [timestamp, ...] where the timestamp unit and the close /
+// base-volume columns differ per exchange.
+function candlesFromRows(rows: unknown[], tsUnit: "ms" | "s", closeIndex: number, volIndex: number): Candle[] {
   return rows.map((r) => {
     const row = arr(r);
-    const ts = num(row[tsIndex]) * (tsUnit === "s" ? 1000 : 1);
-    return { dayStartMs: ts, baseVolume: num(row[volIndex]) };
+    return { startMs: num(row[0]) * (tsUnit === "s" ? 1000 : 1), close: num(row[closeIndex]), baseVolume: num(row[volIndex]) };
   });
 }
 
-function dedupe(candles: DailyCandle[]): DailyCandle[] {
-  const byDay = new Map<number, DailyCandle>();
-  for (const c of candles) byDay.set(c.dayStartMs, c);
-  return [...byDay.values()].sort((a, b) => a.dayStartMs - b.dayStartMs);
+function dedupe(candles: Candle[]): Candle[] {
+  const byStart = new Map<number, Candle>();
+  for (const c of candles) byStart.set(c.startMs, c);
+  return [...byStart.values()].sort((a, b) => a.startMs - b.startMs);
+}
+
+// For APIs that return a fixed-size page ending at a cursor: walks backwards
+// until the oldest candle reaches sinceMs or a short page signals the start of history.
+async function pageBackward(
+  pageSize: number,
+  sinceMs: number,
+  nowMs: number,
+  resolution: CandleResolution,
+  fetchPage: (cursor: number | null) => Promise<Candle[]>
+): Promise<Candle[]> {
+  const maxPages = Math.ceil((nowMs - sinceMs) / RESOLUTION_MS[resolution] / pageSize) + 1;
+  const out: Candle[] = [];
+  let cursor: number | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const batch = await fetchPage(cursor);
+    if (batch.length === 0) break;
+    out.push(...batch);
+    const oldest = Math.min(...batch.map((c) => c.startMs));
+    if (oldest <= sinceMs || batch.length < pageSize) break;
+    cursor = oldest;
+  }
+  return dedupe(out);
 }
 
 const sec = (ms: number) => Math.floor(ms / 1000);
@@ -78,9 +104,9 @@ const binance: VenueAdapter = {
       return o.status === "TRADING" ? { base: String(o.baseAsset), quote: String(o.quoteAsset), symbol: String(o.symbol) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs) {
-    const rows = arr(await getJson(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&startTime=${sinceMs}&limit=1000`, `Binance klines ${symbol}`, CANDLE_REVALIDATE, this.pace));
-    return candlesFromRows(rows, 0, "ms", 5);
+  async fetchCandles(symbol, resolution, sinceMs) {
+    const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${resolution}&startTime=${sinceMs}&limit=1000`;
+    return dedupe(candlesFromRows(arr(await getJson(url, `Binance klines ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)), "ms", 4, 5));
   },
 };
 
@@ -94,19 +120,12 @@ const okx: VenueAdapter = {
       return o.state === "live" ? { base: String(o.baseCcy), quote: String(o.quoteCcy), symbol: String(o.instId) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs) {
-    const out: DailyCandle[] = [];
-    let after = "";
-    for (let page = 0; page < 6; page++) {
-      const data = rec(await getJson(`https://www.okx.com/api/v5/market/history-candles?instId=${symbol}&bar=1Dutc&limit=100${after}`, `OKX candles ${symbol}`, CANDLE_REVALIDATE, this.pace));
-      const batch = candlesFromRows(arr(data.data), 0, "ms", 5);
-      if (batch.length === 0) break;
-      out.push(...batch);
-      const oldest = Math.min(...batch.map((c) => c.dayStartMs));
-      if (oldest <= sinceMs) break;
-      after = `&after=${oldest}`;
-    }
-    return dedupe(out);
+  async fetchCandles(symbol, resolution, sinceMs, nowMs) {
+    const bar = resolution === "1h" ? "1H" : "1Dutc";
+    return pageBackward(100, sinceMs, nowMs, resolution, async (cursor) => {
+      const url = `https://www.okx.com/api/v5/market/history-candles?instId=${symbol}&bar=${bar}&limit=100${cursor ? `&after=${cursor}` : ""}`;
+      return candlesFromRows(arr(rec(await getJson(url, `OKX candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)).data), "ms", 4, 5);
+    });
   },
 };
 
@@ -120,12 +139,13 @@ const coinbase: VenueAdapter = {
       return o.status === "online" && !o.trading_disabled ? { base: String(o.base_currency), quote: String(o.quote_currency), symbol: String(o.id) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs, nowMs) {
-    const out: DailyCandle[] = [];
-    for (let start = sinceMs; start <= nowMs; start += 300 * DAY_MS) {
-      const end = Math.min(start + 299 * DAY_MS, nowMs);
-      const url = `https://api.exchange.coinbase.com/products/${symbol}/candles?granularity=86400&start=${new Date(start).toISOString()}&end=${new Date(end).toISOString()}`;
-      out.push(...candlesFromRows(arr(await getJson(url, `Coinbase candles ${symbol}`, CANDLE_REVALIDATE, this.pace)), 0, "s", 5));
+  async fetchCandles(symbol, resolution, sinceMs, nowMs) {
+    const step = RESOLUTION_MS[resolution];
+    const out: Candle[] = [];
+    for (let start = sinceMs; start <= nowMs; start += 300 * step) {
+      const end = Math.min(start + 299 * step, nowMs);
+      const url = `https://api.exchange.coinbase.com/products/${symbol}/candles?granularity=${step / 1000}&start=${new Date(start).toISOString()}&end=${new Date(end).toISOString()}`;
+      out.push(...candlesFromRows(arr(await getJson(url, `Coinbase candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)), "s", 4, 5));
     }
     return dedupe(out);
   },
@@ -140,14 +160,15 @@ const bybit: VenueAdapter = {
       return o.status === "Trading" ? { base: String(o.baseCoin), quote: String(o.quoteCoin), symbol: String(o.symbol) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs) {
-    const data = rec(await getJson(`https://api.bybit.com/v5/market/kline?category=spot&symbol=${symbol}&interval=D&start=${sinceMs}&limit=1000`, `Bybit klines ${symbol}`, CANDLE_REVALIDATE, this.pace));
-    return dedupe(candlesFromRows(arr(rec(data.result).list), 0, "ms", 5));
+  async fetchCandles(symbol, resolution, sinceMs) {
+    const url = `https://api.bybit.com/v5/market/kline?category=spot&symbol=${symbol}&interval=${resolution === "1h" ? "60" : "D"}&start=${sinceMs}&limit=1000`;
+    const data = rec(await getJson(url, `Bybit klines ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
+    return dedupe(candlesFromRows(arr(rec(data.result).list), "ms", 4, 5));
   },
 };
 
 // Upbit markets are "QUOTE-BASE". Its `timestamp` field is the last trade
-// time, not the candle start — candle_date_time_utc is the UTC day.
+// time, not the candle start — candle_date_time_utc is the bucket start.
 const upbit: VenueAdapter = {
   pace: { key: "upbit", minIntervalMs: 150 },
   async listPairs() {
@@ -158,28 +179,22 @@ const upbit: VenueAdapter = {
       return quote && base ? { base, quote, symbol: market } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs) {
-    const out: DailyCandle[] = [];
-    let to = "";
-    for (let page = 0; page < 3; page++) {
-      const rows = arr(await getJson(`https://api.upbit.com/v1/candles/days?market=${symbol}&count=200${to}`, `Upbit candles ${symbol}`, CANDLE_REVALIDATE, this.pace));
-      const batch = rows.map((r) => {
+  async fetchCandles(symbol, resolution, sinceMs, nowMs) {
+    const path = resolution === "1h" ? "candles/minutes/60" : "candles/days";
+    return pageBackward(200, sinceMs, nowMs, resolution, async (cursor) => {
+      const to = cursor ? `&to=${encodeURIComponent(new Date(cursor).toISOString().replace(".000Z", "Z"))}` : "";
+      const rows = arr(await getJson(`https://api.upbit.com/v1/${path}?market=${symbol}&count=200${to}`, `Upbit candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
+      return rows.map((r) => {
         const o = rec(r);
-        const day = Date.parse(`${String(o.candle_date_time_utc)}Z`);
-        if (!isFinite(day)) throw new AdapterError("bad Upbit candle date");
-        return { dayStartMs: day, baseVolume: num(o.candle_acc_trade_volume) };
+        const start = Date.parse(`${String(o.candle_date_time_utc)}Z`);
+        if (!isFinite(start)) throw new AdapterError("bad Upbit candle date");
+        return { startMs: start, close: num(o.trade_price), baseVolume: num(o.candle_acc_trade_volume) };
       });
-      if (batch.length === 0) break;
-      out.push(...batch);
-      const oldest = Math.min(...batch.map((c) => c.dayStartMs));
-      if (oldest <= sinceMs || batch.length < 200) break;
-      to = `&to=${encodeURIComponent(new Date(oldest).toISOString().replace(".000Z", "Z"))}`;
-    }
-    return dedupe(out);
+    });
   },
 };
 
-// Kraken's public limit is roughly one request per second; OHLC returns up to 720 rows.
+// Kraken's public limit is roughly one request per second; OHLC returns at most the latest 720 rows.
 const kraken: VenueAdapter = {
   pace: { key: "kraken", minIntervalMs: 1100 },
   async listPairs() {
@@ -191,13 +206,15 @@ const kraken: VenueAdapter = {
       return base && quote ? { base, quote, symbol: key } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs) {
-    const data = rec(await getJson(`https://api.kraken.com/0/public/OHLC?pair=${symbol}&interval=1440&since=${sec(sinceMs) - 1}`, `Kraken OHLC ${symbol}`, CANDLE_REVALIDATE, this.pace));
+  async fetchCandles(symbol, resolution, sinceMs) {
+    const interval = resolution === "1h" ? 60 : 1440;
+    const url = `https://api.kraken.com/0/public/OHLC?pair=${symbol}&interval=${interval}&since=${sec(sinceMs) - 1}`;
+    const data = rec(await getJson(url, `Kraken OHLC ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
     if (Array.isArray(data.error) && data.error.length > 0) throw new AdapterError(`Kraken OHLC ${symbol}: ${data.error.join(", ")}`);
     const result = rec(data.result);
     const key = Object.keys(result).find((k) => k !== "last");
     if (!key) return [];
-    return dedupe(candlesFromRows(arr(result[key]), 0, "s", 6));
+    return dedupe(candlesFromRows(arr(result[key]), "s", 4, 6));
   },
 };
 
@@ -210,9 +227,9 @@ const kucoin: VenueAdapter = {
       return o.enableTrading ? { base: String(o.baseCurrency), quote: String(o.quoteCurrency), symbol: String(o.symbol) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs, nowMs) {
-    const data = rec(await getJson(`https://api.kucoin.com/api/v1/market/candles?type=1day&symbol=${symbol}&startAt=${sec(sinceMs)}&endAt=${sec(nowMs)}`, `KuCoin candles ${symbol}`, CANDLE_REVALIDATE, this.pace));
-    return dedupe(candlesFromRows(arr(data.data), 0, "s", 5));
+  async fetchCandles(symbol, resolution, sinceMs, nowMs) {
+    const url = `https://api.kucoin.com/api/v1/market/candles?type=${resolution === "1h" ? "1hour" : "1day"}&symbol=${symbol}&startAt=${sec(sinceMs)}&endAt=${sec(nowMs)}`;
+    return dedupe(candlesFromRows(arr(rec(await getJson(url, `KuCoin candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)).data), "s", 2, 5));
   },
 };
 
@@ -225,13 +242,15 @@ const gate: VenueAdapter = {
       return o.trade_status === "tradable" ? { base: String(o.base), quote: String(o.quote), symbol: String(o.id) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs, nowMs) {
-    const rows = arr(await getJson(`https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${symbol}&interval=1d&from=${sec(sinceMs)}&to=${sec(nowMs)}`, `Gate candles ${symbol}`, CANDLE_REVALIDATE, this.pace));
-    return dedupe(candlesFromRows(rows, 0, "s", 6));
+  async fetchCandles(symbol, resolution, sinceMs, nowMs) {
+    const url = `https://api.gateio.ws/api/v4/spot/candlesticks?currency_pair=${symbol}&interval=${resolution}&from=${sec(sinceMs)}&to=${sec(nowMs)}`;
+    return dedupe(candlesFromRows(arr(await getJson(url, `Gate candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)), "s", 2, 6));
   },
 };
 
-// Bitget's "1Dutc" is UTC-aligned; history-candles returns at most 200 rows per call.
+// Bitget's "1Dutc" is UTC-aligned; history-candles returns at most 200 rows
+// per call, and its endTime is compared against candle close, so passing
+// the oldest start returns the bucket before it.
 const bitget: VenueAdapter = {
   pace: { key: "bitget", minIntervalMs: 350 },
   async listPairs() {
@@ -241,20 +260,12 @@ const bitget: VenueAdapter = {
       return o.status === "online" ? { base: String(o.baseCoin), quote: String(o.quoteCoin), symbol: String(o.symbol) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs, nowMs) {
-    const out: DailyCandle[] = [];
-    let endTime = nowMs;
-    for (let page = 0; page < 3; page++) {
-      const data = rec(await getJson(`https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${symbol}&granularity=1Dutc&endTime=${endTime}&limit=200`, `Bitget candles ${symbol}`, CANDLE_REVALIDATE, this.pace));
-      const batch = candlesFromRows(arr(data.data), 0, "ms", 5);
-      if (batch.length === 0) break;
-      out.push(...batch);
-      const oldest = Math.min(...batch.map((c) => c.dayStartMs));
-      if (oldest <= sinceMs || batch.length < 200) break;
-      // endTime is compared against candle close, so `oldest` itself returns the day before it.
-      endTime = oldest;
-    }
-    return dedupe(out);
+  async fetchCandles(symbol, resolution, sinceMs, nowMs) {
+    const granularity = resolution === "1h" ? "1h" : "1Dutc";
+    return pageBackward(200, sinceMs, nowMs, resolution, async (cursor) => {
+      const url = `https://api.bitget.com/api/v2/spot/market/history-candles?symbol=${symbol}&granularity=${granularity}&endTime=${cursor ?? nowMs}&limit=200`;
+      return candlesFromRows(arr(rec(await getJson(url, `Bitget candles ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace)).data), "ms", 4, 5);
+    });
   },
 };
 
@@ -269,15 +280,26 @@ const bitstamp: VenueAdapter = {
       return base && quote ? { base, quote, symbol: String(o.url_symbol) } : null;
     });
   },
-  async fetchDaily(symbol, sinceMs) {
-    const data = rec(await getJson(`https://www.bitstamp.net/api/v2/ohlc/${symbol}/?step=86400&limit=1000&start=${sec(sinceMs)}`, `Bitstamp OHLC ${symbol}`, CANDLE_REVALIDATE, this.pace));
+  async fetchCandles(symbol, resolution, sinceMs) {
+    const url = `https://www.bitstamp.net/api/v2/ohlc/${symbol}/?step=${RESOLUTION_MS[resolution] / 1000}&limit=1000&start=${sec(sinceMs)}`;
+    const data = rec(await getJson(url, `Bitstamp OHLC ${symbol}`, CANDLE_REVALIDATE[resolution], this.pace));
     return dedupe(
       arr(rec(data.data).ohlc).map((r) => {
         const o = rec(r);
-        return { dayStartMs: num(o.timestamp) * 1000, baseVolume: num(o.volume) };
+        return { startMs: num(o.timestamp) * 1000, close: num(o.close), baseVolume: num(o.volume) };
       })
     );
   },
 };
 
 export const ADAPTERS: Record<CexVenueId, VenueAdapter> = { binance, okx, coinbase, bybit, upbit, kraken, kucoin, gate, bitget, bitstamp };
+
+const pairListCache = new TtlCache<PairRef[]>();
+
+export async function getVenuePairs(venueId: CexVenueId): Promise<PairRef[]> {
+  const cached = pairListCache.get(venueId);
+  if (cached) return cached;
+  const pairs = await ADAPTERS[venueId].listPairs();
+  if (pairs.length > 0) pairListCache.set(venueId, pairs, PAIR_LIST_TTL_MS);
+  return pairs;
+}

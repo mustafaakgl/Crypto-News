@@ -93,29 +93,27 @@ export function ExchangeAnalyticsClient() {
         ))}
       </div>
 
-      {/* Volume and Flows share period/venue-count controls; Price
-          comparison compares live current observations, not a historical
-          window, so those controls don't apply and aren't shown. */}
-      {tab !== "price" && (
-        <div className="flex flex-wrap items-center gap-4 border-b border-rule pb-3 mb-6">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-ink/60 uppercase tracking-wide">{t.period}</span>
-            <div className="flex gap-1" role="group" aria-label={t.ariaSelectPeriod}>
-              {EXCHANGE_PERIODS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => navigate({ period: p })}
-                  aria-pressed={period === p}
-                  className={`px-3 py-1 text-xs font-semibold border ${
-                    period === p ? "bg-ink text-paper border-ink" : "border-ink/30 text-ink/60 hover:border-ink"
-                  }`}
-                >
-                  {t.periodLabels[p]}
-                </button>
-              ))}
-            </div>
+      {/* Price comparison always uses all ten exchanges as its reference set, so only Period applies there. */}
+      <div className="flex flex-wrap items-center gap-4 border-b border-rule pb-3 mb-6">
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-ink/60 uppercase tracking-wide">{t.period}</span>
+          <div className="flex gap-1" role="group" aria-label={t.ariaSelectPeriod}>
+            {EXCHANGE_PERIODS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => navigate({ period: p })}
+                aria-pressed={period === p}
+                className={`px-3 py-1 text-xs font-semibold border ${
+                  period === p ? "bg-ink text-paper border-ink" : "border-ink/30 text-ink/60 hover:border-ink"
+                }`}
+              >
+                {t.periodLabels[p]}
+              </button>
+            ))}
           </div>
+        </div>
+        {tab !== "price" && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-ink/60 uppercase tracking-wide">{t.venues}</span>
             <div className="flex gap-1" role="group" aria-label={t.ariaSelectVenueCount}>
@@ -134,8 +132,8 @@ export function ExchangeAnalyticsClient() {
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {tab === "volume" && <VolumeTab period={period} count={count} locale={locale} />}
       {tab === "flows" && (
@@ -149,7 +147,7 @@ export function ExchangeAnalyticsClient() {
           locale={locale}
         />
       )}
-      {tab === "price" && <PriceComparisonTab locale={locale} />}
+      {tab === "price" && <PriceComparisonTab period={period} locale={locale} />}
     </div>
   );
 }
