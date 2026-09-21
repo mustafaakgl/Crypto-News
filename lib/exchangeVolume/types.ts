@@ -44,3 +44,13 @@ export type VenueVolumeResult = {
   asOf: string;
   warnings: string[];
 };
+
+export type VenueRolling24h = {
+  totalUsd: number; // every spot pair on the venue
+  trackedUsd: number; // the tracked major pairs, from the same snapshot
+  stableSwapUsd: number; // stablecoin ↔ stablecoin / USD pairs, included in totalUsd
+  pairsCounted: number;
+  pairsUnvalued: number;
+  unvaluedQuotes: string[];
+  asOf: string;
+};

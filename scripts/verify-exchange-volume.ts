@@ -2,6 +2,7 @@
 // Run with: node scripts/verify-exchange-volume.ts
 import { aggregatePeriod, quoteType, toTrackedPair, DAY_MS } from "../lib/exchangeVolume/aggregate.ts";
 import type { PairHistory, ReferencePrices } from "../lib/exchangeVolume/types.ts";
+import { quoteUsdPrices, rolling24hTotals, type PricedTicker } from "../lib/exchangeVolume/rolling24h.ts";
 
 let failures = 0;
 
@@ -94,6 +95,37 @@ assertEqual(d3.pairsWithGaps, 1, "ETHBTC missing day(2) is flagged as a gap");
 
 const utc = aggregatePeriod(pairs, prices, 1, today);
 assertEqual(utc.endDay, "2026-09-20", "exactly at midnight, the new day is not yet complete");
+
+// ---- rolling 24h: quote currencies priced from the venue's own pairs ----
+const tickers: PricedTicker[] = [
+  { base: "BTC", quote: "USDT", last: 100_000, quoteVolume: 1_000_000 },
+  { base: "EUR", quote: "USDT", last: 1.1, quoteVolume: 50_000 }, // EUR priced directly
+  { base: "USDT", quote: "TRY", last: 40, quoteVolume: 4_000_000 }, // TRY priced by inverting
+  { base: "BTC", quote: "KRW", last: 140_000_000, quoteVolume: 1_400_000_000 }, // KRW via BTC
+  { base: "BTC", quote: "EUR", last: 90_000, quoteVolume: 90_000 },
+  { base: "DOGE", quote: "TRY", last: 8, quoteVolume: 400_000 },
+  { base: "USDC", quote: "USDT", last: 1, quoteVolume: 500_000 },
+  { base: "ABC", quote: "ZZZ", last: 1, quoteVolume: 999 }, // unpriceable quote
+  { base: "XYZ", quote: "USDT", last: 1, quoteVolume: 0 }, // no volume, ignored
+];
+const px = quoteUsdPrices(tickers);
+assertEqual([px.get("USDT"), px.get("EUR"), px.get("TRY"), px.get("BTC")], [1, 1.1, 0.025, 100_000], "direct, inverted and stable quote prices");
+assertEqual(Math.round(px.get("KRW")! * 1e7) / 1e7, Math.round((100_000 / 140_000_000) * 1e7) / 1e7, "KRW priced via BTC/KRW");
+assertEqual(
+  quoteUsdPrices([
+    { base: "EUR", quote: "USDT", last: 1.2, quoteVolume: 10 },
+    { base: "EUR", quote: "USDC", last: 1.1, quoteVolume: 1_000 },
+  ]).get("EUR"),
+  1.1,
+  "the higher-volume candidate wins"
+);
+
+const r24 = rolling24hTotals(tickers, (b, q) => b === "BTC" && q !== "BTC");
+assertEqual(r24.pairsCounted, 7, "priced pairs with volume are counted");
+assertEqual([r24.pairsUnvalued, r24.unvaluedQuotes], [1, ["ZZZ"]], "unpriceable quote is reported, not guessed");
+assertEqual(Math.round(r24.trackedUsd), 1_000_000 + 1_000_000 + 99_000, "tracked = BTC pairs in USD");
+assertEqual(Math.round(r24.stableSwapUsd), 500_000, "stable↔stable volume broken out");
+assertEqual(Math.round(r24.totalUsd), 1_000_000 + 50_000 + 100_000 + 1_000_000 + 99_000 + 10_000 + 500_000, "total over every priced pair");
 
 if (failures > 0) {
   console.error(`\n${failures} failure(s)`);

@@ -1,10 +1,11 @@
 import "server-only";
 import { fetchJson } from "@/lib/httpClient";
 import { TtlCache, type StaleAwareResult } from "@/lib/rag/cache";
-import { ADAPTERS, getVenuePairs } from "@/lib/exchangeVolume/adapters";
-import { aggregateAllPeriods, BASE_ASSETS, DAY_MS, HISTORY_DAYS, utcDayStart } from "@/lib/exchangeVolume/aggregate";
+import { ADAPTERS, getVenueInstruments, getVenuePairs } from "@/lib/exchangeVolume/adapters";
+import { aggregateAllPeriods, BASE_ASSETS, DAY_MS, HISTORY_DAYS, toTrackedPair, utcDayStart } from "@/lib/exchangeVolume/aggregate";
+import { rolling24hTotals, type PricedTicker } from "@/lib/exchangeVolume/rolling24h";
 import { CEX_VENUES, type CexVenueId } from "@/lib/exchangeVolume/venues";
-import type { BaseAsset, PairHistory, PairRef, ReferencePrices, VenueVolumeResult } from "@/lib/exchangeVolume/types";
+import type { BaseAsset, PairHistory, PairRef, ReferencePrices, VenueRolling24h, VenueVolumeResult } from "@/lib/exchangeVolume/types";
 
 // Daily candles only change once per UTC day, so an hour of freshness is
 // plenty; a stale result (clearly dated by its window) may be served for a
@@ -16,6 +17,10 @@ const KRAKEN_USD_PAIR: Record<BaseAsset, string> = { BTC: "XBTUSD", ETH: "ETHUSD
 
 const priceCache = new TtlCache<ReferencePrices>();
 const venueCache = new TtlCache<VenueVolumeResult>();
+const rollingCache = new TtlCache<VenueRolling24h>();
+
+const ROLLING_TTL_MS = 10 * 60 * 1000;
+const ROLLING_STALE_TTL_MS = 60 * 60 * 1000;
 
 // Kraken's daily VWAP on the real-USD pair: one consistent valuation source
 // for every venue, rather than each venue's own quote currency (which would
@@ -113,4 +118,29 @@ export async function getVenueVolume(venueId: CexVenueId): Promise<StaleAwareRes
     ttlMs: RESULT_TTL_MS,
     staleTtlMs: RESULT_STALE_TTL_MS,
   });
+}
+
+async function computeRolling24h(venueId: CexVenueId): Promise<VenueRolling24h> {
+  const [instruments, tickers] = await Promise.all([getVenueInstruments(venueId), ADAPTERS[venueId].fetchTickers24h()]);
+  const bySymbol = new Map(instruments.map((i) => [i.symbol, i]));
+  const priced: PricedTicker[] = [];
+  for (const t of tickers) {
+    const i = bySymbol.get(t.symbol);
+    if (i) priced.push({ base: i.base, quote: i.quote, last: t.last, quoteVolume: t.quoteVolume });
+  }
+  return { ...rolling24hTotals(priced, (b, q) => toTrackedPair(b, q) !== null), asOf: new Date().toISOString() };
+}
+
+// Returns null rather than failing the whole venue: the daily-candle figures don't depend on it.
+export async function getRolling24h(venueId: CexVenueId): Promise<{ value: VenueRolling24h | null; error: string | null }> {
+  try {
+    const { value } = await rollingCache.getFreshOrStale(venueId, () => computeRolling24h(venueId), {
+      shouldCache: (r) => r.pairsCounted > 0,
+      ttlMs: ROLLING_TTL_MS,
+      staleTtlMs: ROLLING_STALE_TTL_MS,
+    });
+    return { value, error: null };
+  } catch (err) {
+    return { value: null, error: err instanceof Error ? err.message : String(err) };
+  }
 }

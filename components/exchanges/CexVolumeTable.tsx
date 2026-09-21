@@ -2,15 +2,22 @@
 
 import { useState, type ReactNode } from "react";
 import type { ExchangePeriod } from "@/lib/exchangeAnalytics/types";
-import type { BaseAsset, FiatCurrency, QuoteType, VenueVolumeResult } from "@/lib/exchangeVolume/types";
+import type { BaseAsset, FiatCurrency, QuoteType, VenueRolling24h, VenueVolumeResult } from "@/lib/exchangeVolume/types";
 import { formatMarketCap, formatPct, formatQuantity } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/locale";
 import { getDictionary } from "@/lib/i18n/getDictionary";
 
-export type VenueRowState = { id: string; name: string; state: "loading" | "ready" | "error"; data: VenueVolumeResult | null; stale: boolean };
+export type VenueRowState = {
+  id: string;
+  name: string;
+  state: "loading" | "ready" | "error";
+  data: VenueVolumeResult | null;
+  rolling24h: VenueRolling24h | null;
+  stale: boolean;
+};
 
-type View = "quoteType" | "base" | "fiat" | "trend";
-const VIEWS: View[] = ["quoteType", "base", "fiat", "trend"];
+type View = "allPairs" | "quoteType" | "base" | "fiat" | "trend";
+const VIEWS: View[] = ["allPairs", "quoteType", "base", "fiat", "trend"];
 const QUOTE_TYPES: QuoteType[] = ["fiat", "stablecoin", "crypto"];
 const BASES: BaseAsset[] = ["BTC", "ETH", "SOL", "XRP"];
 const FIATS: FiatCurrency[] = ["USD", "EUR", "GBP", "KRW", "TRY"];
@@ -38,13 +45,15 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
 
   const ready = rows.filter((r) => r.state === "ready" && r.data?.periods);
   const pending = rows.filter((r) => !(r.state === "ready" && r.data?.periods));
-  const sorted = [...ready].sort((a, b) => b.data!.periods![period].totalUsd - a.data!.periods![period].totalUsd);
+  const sortKey = (r: VenueRowState) => (view === "allPairs" ? (r.rolling24h?.totalUsd ?? -1) : r.data!.periods![period].totalUsd);
+  const sorted = [...ready].sort((a, b) => sortKey(b) - sortKey(a));
   const perDay = (r: VenueRowState, p: ExchangePeriod) => r.data!.periods![p].totalUsd / r.data!.periods![p].days;
 
   const sum = (f: (r: VenueRowState) => number) => ready.reduce((s, r) => s + f(r), 0);
   const allReady = pending.length === 0 && ready.length > 0;
 
   const headers: string[] = {
+    allPairs: [t.colAllPairs24h, t.colTracked24h, t.colTrackedShare, t.colStableSwap24h, t.colPairsCounted],
     quoteType: [t.colTotal, t.quoteTypeLabels.fiat, t.quoteTypeLabels.stablecoin, t.quoteTypeLabels.crypto, t.colMix],
     base: [t.colTotal, ...BASES],
     fiat: [t.colFiatTotal, ...FIATS],
@@ -56,6 +65,31 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
     const total = p ? p.totalUsd : sum((x) => x.data!.periods![period].totalUsd);
     const qt = (k: QuoteType) => (r ? p!.byQuoteType[k] : sum((x) => x.data!.periods![period].byQuoteType[k]));
     switch (view) {
+      case "allPairs": {
+        const rs = r ? (r.rolling24h ? [r.rolling24h] : []) : ready.flatMap((x) => (x.rolling24h ? [x.rolling24h] : []));
+        if (rs.length === 0) {
+          return (
+            <td colSpan={headers.length} className="py-2 text-xs text-ink/50">
+              {t.rollingUnavailable}
+            </td>
+          );
+        }
+        const all = rs.reduce((a, x) => a + x.totalUsd, 0);
+        const tracked = rs.reduce((a, x) => a + x.trackedUsd, 0);
+        const stable = rs.reduce((a, x) => a + x.stableSwapUsd, 0);
+        return (
+          <>
+            <Num>{usd(all)}</Num>
+            <Num>{usd(tracked)}</Num>
+            <Num>{all > 0 ? `${((tracked / all) * 100).toFixed(1)}%` : "—"}</Num>
+            <Num>
+              {usd(stable)}
+              <Share part={stable} whole={all} />
+            </Num>
+            <Num>{rs.reduce((a, x) => a + x.pairsCounted, 0).toLocaleString(locale === "de" ? "de-DE" : "en-GB")}</Num>
+          </>
+        );
+      }
       case "quoteType":
         return (
           <>
@@ -123,6 +157,10 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
     const d = r.data!;
     const p = d.periods![view === "trend" ? "1y" : period];
     const parts: string[] = [];
+    if (view === "allPairs") {
+      if (r.rolling24h && r.rolling24h.pairsUnvalued > 0) parts.push(t.noteUnvaluedPairs(r.rolling24h.pairsUnvalued, r.rolling24h.unvaluedQuotes.join(", ")));
+      return parts.length > 0 ? [`${d.name}: ${parts.join("; ")}`] : [];
+    }
     if (p.pairsWithShortHistory > 0) parts.push(t.noteShortHistory(p.pairsWithShortHistory));
     if (p.pairsWithGaps > 0) parts.push(t.noteGaps(p.pairsWithGaps));
     if (p.unpricedDays > 0) parts.push(t.noteUnpriced(p.unpricedDays));
@@ -157,6 +195,7 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
         </div>
       )}
       {view === "trend" && <p className="text-xs text-ink/50 mb-2">{t.trendNote}</p>}
+      {view === "allPairs" && <p className="text-xs text-ink/50 mb-2">{t.allPairsNote}</p>}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse">
@@ -207,7 +246,7 @@ export function CexVolumeTable({ rows, period, locale = "en" }: { rows: VenueRow
         </table>
       </div>
 
-      {win && view !== "trend" && <p className="text-[11px] text-ink/40 mt-2">{t.windowNote(win.startDay, win.endDay, win.days)}</p>}
+      {win && view !== "trend" && view !== "allPairs" && <p className="text-[11px] text-ink/40 mt-2">{t.windowNote(win.startDay, win.endDay, win.days)}</p>}
       {notes.length > 0 && (
         <ul className="text-[11px] text-ink/40 mt-1 space-y-0.5">
           {notes.map((n) => (

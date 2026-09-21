@@ -11,19 +11,21 @@ export function VolumeComparisonSummary({
   cexTotalUsd,
   cexVenueCount,
   cexWindow,
+  cexAllPairs24hUsd = null,
   dex,
   locale = "en",
 }: {
   cexTotalUsd: number;
   cexVenueCount: number;
   cexWindow: string;
+  cexAllPairs24hUsd?: number | null;
   dex: DexOverviewResult;
   locale?: Locale;
 }) {
   const t = getDictionary(locale).volumeComparisonSummary;
   const dexTotalUsd = dex.totalVolumeUsd;
 
-  const maxUsd = Math.max(cexTotalUsd, dexTotalUsd ?? 0, 1);
+  const maxUsd = Math.max(cexTotalUsd, cexAllPairs24hUsd ?? 0, dexTotalUsd ?? 0, 1);
   const cexBarPct = (cexTotalUsd / maxUsd) * 100;
   const dexBarPct = dexTotalUsd !== null ? (dexTotalUsd / maxUsd) * 100 : 0;
 
@@ -49,6 +51,15 @@ export function VolumeComparisonSummary({
             </td>
             <td className="py-1.5 text-right tabular-nums">{formatMarketCap(cexTotalUsd)}</td>
           </tr>
+          {cexAllPairs24hUsd !== null && (
+            <tr className="border-b border-rule/60">
+              <td className="py-1.5">
+                <span className="inline-block w-2.5 h-2.5 bg-accent/50 mr-1.5 align-middle" aria-hidden />
+                {t.cexAllPairsRow(cexVenueCount)}
+              </td>
+              <td className="py-1.5 text-right tabular-nums">{formatMarketCap(cexAllPairs24hUsd)}</td>
+            </tr>
+          )}
           <tr>
             <td className="py-1.5">
               <span className="inline-block w-2.5 h-2.5 bg-ink mr-1.5 align-middle" aria-hidden />
@@ -64,6 +75,7 @@ export function VolumeComparisonSummary({
         aria-label={t.ariaLabel(cexVenueCount, formatMarketCap(cexTotalUsd), dexTotalUsd !== null ? formatMarketCap(dexTotalUsd) : "unknown")}
       >
         <div className="h-3 bg-accent" style={{ width: `${Math.max(cexBarPct, 1.5)}%` }} />
+        {cexAllPairs24hUsd !== null && <div className="h-3 bg-accent/50" style={{ width: `${Math.max((cexAllPairs24hUsd / maxUsd) * 100, 1.5)}%` }} />}
         <div className="h-3 bg-ink" style={{ width: `${Math.max(dexBarPct, dexTotalUsd !== null ? 1.5 : 0)}%` }} />
       </div>
       <p className="text-[11px] text-ink/50">{t.footer}</p>

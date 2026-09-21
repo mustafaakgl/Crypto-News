@@ -5,9 +5,15 @@ import { TtlCache } from "@/lib/rag/cache";
 import type { Candle, CandleResolution, PairRef } from "@/lib/exchangeVolume/types";
 import type { CexVenueId } from "@/lib/exchangeVolume/venues";
 
+export type Instrument = { base: string; quote: string; symbol: string };
+export type RawTicker = { symbol: string; last: number; quoteVolume: number };
+
 export type VenueAdapter = {
   pace: PacedOptions;
-  listPairs(): Promise<PairRef[]>;
+  // Every spot instrument, with asset codes normalized (uppercase, Kraken's XBT → BTC).
+  listInstruments(): Promise<Instrument[]>;
+  // Rolling-24h snapshot of every spot pair in one call; quoteVolume is in the pair's quote currency.
+  fetchTickers24h(): Promise<RawTicker[]>;
   // Candles whose start is at or after sinceMs, UTC-aligned; may include the in-progress bucket.
   fetchCandles(symbol: string, resolution: CandleResolution, sinceMs: number, nowMs: number): Promise<Candle[]>;
 };
@@ -40,17 +46,20 @@ function arr(v: unknown): unknown[] {
 
 function num(v: unknown): number {
   const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
-  if (!isFinite(n)) throw new AdapterError("non-numeric field in candle");
+  if (!isFinite(n)) throw new AdapterError("non-numeric field in response");
   return n;
 }
 
-function pairsFrom<T>(items: T[], pick: (item: T) => { base: string; quote: string; symbol: string } | null): PairRef[] {
-  const out: PairRef[] = [];
+function normalizeAsset(code: string): string {
+  const u = code.toUpperCase();
+  return u === "XBT" ? "BTC" : u;
+}
+
+function pairsFrom<T>(items: T[], pick: (item: T) => { base: string; quote: string; symbol: string } | null): Instrument[] {
+  const out: Instrument[] = [];
   for (const item of items) {
     const raw = pick(item);
-    if (!raw) continue;
-    const tracked = toTrackedPair(raw.base, raw.quote);
-    if (tracked) out.push({ ...tracked, symbol: raw.symbol });
+    if (raw) out.push({ base: normalizeAsset(raw.base), quote: normalizeAsset(raw.quote), symbol: raw.symbol });
   }
   return out;
 }
@@ -93,15 +102,36 @@ async function pageBackward(
   return dedupe(out);
 }
 
+// Illiquid or halted pairs can report null/empty prices; those are skipped, not fatal.
+function tickersFrom<T>(items: T[], pick: (item: T) => { symbol: unknown; last: unknown; quoteVolume: unknown }): RawTicker[] {
+  const out: RawTicker[] = [];
+  for (const item of items) {
+    const r = pick(item);
+    const last = Number(r.last);
+    const quoteVolume = Number(r.quoteVolume);
+    if (typeof r.symbol === "string" && isFinite(last) && last > 0 && isFinite(quoteVolume) && quoteVolume >= 0) out.push({ symbol: r.symbol, last, quoteVolume });
+  }
+  return out;
+}
+
+const TICKER_REVALIDATE = 0;
+
 const sec = (ms: number) => Math.floor(ms / 1000);
 
 const binance: VenueAdapter = {
   pace: { key: "binance", minIntervalMs: 100 },
-  async listPairs() {
+  async listInstruments() {
     const data = rec(await getJson("https://api.binance.com/api/v3/exchangeInfo?permissions=SPOT", "Binance symbols", LIST_REVALIDATE, this.pace));
     return pairsFrom(arr(data.symbols), (s) => {
       const o = rec(s);
       return o.status === "TRADING" ? { base: String(o.baseAsset), quote: String(o.quoteAsset), symbol: String(o.symbol) } : null;
+    });
+  },
+  async fetchTickers24h() {
+    const data = arr(await getJson("https://api.binance.com/api/v3/ticker/24hr", "Binance 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(data, (t) => {
+      const o = rec(t);
+      return { symbol: o.symbol, last: o.lastPrice, quoteVolume: o.quoteVolume };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs) {
@@ -113,11 +143,19 @@ const binance: VenueAdapter = {
 // OKX's default "1D" bar is aligned to UTC+8; "1Dutc" is the UTC one.
 const okx: VenueAdapter = {
   pace: { key: "okx", minIntervalMs: 120 },
-  async listPairs() {
+  async listInstruments() {
     const data = rec(await getJson("https://www.okx.com/api/v5/public/instruments?instType=SPOT", "OKX instruments", LIST_REVALIDATE, this.pace));
     return pairsFrom(arr(data.data), (s) => {
       const o = rec(s);
       return o.state === "live" ? { base: String(o.baseCcy), quote: String(o.quoteCcy), symbol: String(o.instId) } : null;
+    });
+  },
+  // For SPOT, volCcy24h is the 24h volume in the quote currency.
+  async fetchTickers24h() {
+    const data = rec(await getJson("https://www.okx.com/api/v5/market/tickers?instType=SPOT", "OKX 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(arr(data.data), (t) => {
+      const o = rec(t);
+      return { symbol: o.instId, last: o.last, quoteVolume: o.volCcy24h };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
@@ -132,11 +170,19 @@ const okx: VenueAdapter = {
 // Coinbase caps a candles request at 300 buckets.
 const coinbase: VenueAdapter = {
   pace: { key: "coinbase", minIntervalMs: 150 },
-  async listPairs() {
+  async listInstruments() {
     const data = arr(await getJson("https://api.exchange.coinbase.com/products", "Coinbase products", LIST_REVALIDATE, this.pace));
     return pairsFrom(data, (s) => {
       const o = rec(s);
       return o.status === "online" && !o.trading_disabled ? { base: String(o.base_currency), quote: String(o.quote_currency), symbol: String(o.id) } : null;
+    });
+  },
+  // /products/stats reports base volume only, so quote volume is approximated as base volume × last price.
+  async fetchTickers24h() {
+    const data = rec(await getJson("https://api.exchange.coinbase.com/products/stats", "Coinbase 24h stats", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(Object.entries(data), ([id, v]) => {
+      const s24 = rec(rec(v).stats_24hour);
+      return { symbol: id, last: s24.last, quoteVolume: Number(s24.volume) * Number(s24.last) };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
@@ -153,11 +199,18 @@ const coinbase: VenueAdapter = {
 
 const bybit: VenueAdapter = {
   pace: { key: "bybit", minIntervalMs: 100 },
-  async listPairs() {
+  async listInstruments() {
     const data = rec(await getJson("https://api.bybit.com/v5/market/instruments-info?category=spot", "Bybit instruments", LIST_REVALIDATE, this.pace));
     return pairsFrom(arr(rec(data.result).list), (s) => {
       const o = rec(s);
       return o.status === "Trading" ? { base: String(o.baseCoin), quote: String(o.quoteCoin), symbol: String(o.symbol) } : null;
+    });
+  },
+  async fetchTickers24h() {
+    const data = rec(await getJson("https://api.bybit.com/v5/market/tickers?category=spot", "Bybit 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(arr(rec(data.result).list), (t) => {
+      const o = rec(t);
+      return { symbol: o.symbol, last: o.lastPrice, quoteVolume: o.turnover24h };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs) {
@@ -171,12 +224,19 @@ const bybit: VenueAdapter = {
 // time, not the candle start — candle_date_time_utc is the bucket start.
 const upbit: VenueAdapter = {
   pace: { key: "upbit", minIntervalMs: 150 },
-  async listPairs() {
+  async listInstruments() {
     const data = arr(await getJson("https://api.upbit.com/v1/market/all", "Upbit markets", LIST_REVALIDATE, this.pace));
     return pairsFrom(data, (s) => {
       const market = String(rec(s).market);
       const [quote, base] = market.split("-");
       return quote && base ? { base, quote, symbol: market } : null;
+    });
+  },
+  async fetchTickers24h() {
+    const data = arr(await getJson("https://api.upbit.com/v1/ticker/all?quote_currencies=KRW,BTC,USDT", "Upbit 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(data, (t) => {
+      const o = rec(t);
+      return { symbol: o.market, last: o.trade_price, quoteVolume: o.acc_trade_price_24h };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
@@ -197,13 +257,24 @@ const upbit: VenueAdapter = {
 // Kraken's public limit is roughly one request per second; OHLC returns at most the latest 720 rows.
 const kraken: VenueAdapter = {
   pace: { key: "kraken", minIntervalMs: 1100 },
-  async listPairs() {
+  async listInstruments() {
     const data = rec(await getJson("https://api.kraken.com/0/public/AssetPairs", "Kraken asset pairs", LIST_REVALIDATE, this.pace));
     return pairsFrom(Object.entries(rec(data.result)), ([key, v]) => {
       const o = rec(v);
       if (typeof o.wsname !== "string" || (o.status !== undefined && o.status !== "online")) return null;
       const [base, quote] = o.wsname.split("/");
       return base && quote ? { base, quote, symbol: key } : null;
+    });
+  },
+  // v[1] is the last-24h base volume and p[1] the last-24h VWAP.
+  async fetchTickers24h() {
+    const data = rec(await getJson("https://api.kraken.com/0/public/Ticker", "Kraken 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(Object.entries(rec(data.result)), ([key, v]) => {
+      const o = rec(v);
+      const c = Array.isArray(o.c) ? o.c : [];
+      const vol = Array.isArray(o.v) ? o.v : [];
+      const vwap = Array.isArray(o.p) ? o.p : [];
+      return { symbol: key, last: c[0], quoteVolume: Number(vol[1]) * Number(vwap[1]) };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs) {
@@ -220,11 +291,18 @@ const kraken: VenueAdapter = {
 
 const kucoin: VenueAdapter = {
   pace: { key: "kucoin", minIntervalMs: 150 },
-  async listPairs() {
+  async listInstruments() {
     const data = rec(await getJson("https://api.kucoin.com/api/v2/symbols", "KuCoin symbols", LIST_REVALIDATE, this.pace));
     return pairsFrom(arr(data.data), (s) => {
       const o = rec(s);
       return o.enableTrading ? { base: String(o.baseCurrency), quote: String(o.quoteCurrency), symbol: String(o.symbol) } : null;
+    });
+  },
+  async fetchTickers24h() {
+    const data = rec(await getJson("https://api.kucoin.com/api/v1/market/allTickers", "KuCoin 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(arr(rec(data.data).ticker), (t) => {
+      const o = rec(t);
+      return { symbol: o.symbol, last: o.last, quoteVolume: o.volValue };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
@@ -235,11 +313,18 @@ const kucoin: VenueAdapter = {
 
 const gate: VenueAdapter = {
   pace: { key: "gate", minIntervalMs: 120 },
-  async listPairs() {
+  async listInstruments() {
     const data = arr(await getJson("https://api.gateio.ws/api/v4/spot/currency_pairs", "Gate currency pairs", LIST_REVALIDATE, this.pace));
     return pairsFrom(data, (s) => {
       const o = rec(s);
       return o.trade_status === "tradable" ? { base: String(o.base), quote: String(o.quote), symbol: String(o.id) } : null;
+    });
+  },
+  async fetchTickers24h() {
+    const data = arr(await getJson("https://api.gateio.ws/api/v4/spot/tickers", "Gate 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(data, (t) => {
+      const o = rec(t);
+      return { symbol: o.currency_pair, last: o.last, quoteVolume: o.quote_volume };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
@@ -253,11 +338,20 @@ const gate: VenueAdapter = {
 // the oldest start returns the bucket before it.
 const bitget: VenueAdapter = {
   pace: { key: "bitget", minIntervalMs: 350 },
-  async listPairs() {
+  async listInstruments() {
     const data = rec(await getJson("https://api.bitget.com/api/v2/spot/public/symbols", "Bitget symbols", LIST_REVALIDATE, this.pace));
+    // areaSymbol "yes" is Bitget's separate zone, ~2,100 tokenized US stocks (rNKE, rHCA, …) that
+    // reported ~$96B/24h in 2026-09 against ~$1.4B for all its crypto pairs — not crypto trading.
     return pairsFrom(arr(data.data), (s) => {
       const o = rec(s);
-      return o.status === "online" ? { base: String(o.baseCoin), quote: String(o.quoteCoin), symbol: String(o.symbol) } : null;
+      return o.status === "online" && o.areaSymbol !== "yes" ? { base: String(o.baseCoin), quote: String(o.quoteCoin), symbol: String(o.symbol) } : null;
+    });
+  },
+  async fetchTickers24h() {
+    const data = rec(await getJson("https://api.bitget.com/api/v2/spot/market/tickers", "Bitget 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(arr(data.data), (t) => {
+      const o = rec(t);
+      return { symbol: o.symbol, last: o.lastPr, quoteVolume: o.quoteVolume };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs, nowMs) {
@@ -271,13 +365,21 @@ const bitget: VenueAdapter = {
 
 const bitstamp: VenueAdapter = {
   pace: { key: "bitstamp", minIntervalMs: 150 },
-  async listPairs() {
+  async listInstruments() {
     const data = arr(await getJson("https://www.bitstamp.net/api/v2/trading-pairs-info/", "Bitstamp pairs", LIST_REVALIDATE, this.pace));
     return pairsFrom(data, (s) => {
       const o = rec(s);
       if (o.trading !== "Enabled" || typeof o.name !== "string") return null;
       const [base, quote] = o.name.split("/");
       return base && quote ? { base, quote, symbol: String(o.url_symbol) } : null;
+    });
+  },
+  // The ticker is keyed by "BTC/USD"; instruments by url_symbol "btcusd".
+  async fetchTickers24h() {
+    const data = arr(await getJson("https://www.bitstamp.net/api/v2/ticker/", "Bitstamp 24h tickers", TICKER_REVALIDATE, this.pace));
+    return tickersFrom(data, (t) => {
+      const o = rec(t);
+      return { symbol: String(o.pair).replace("/", "").toLowerCase(), last: o.last, quoteVolume: Number(o.volume) * Number(o.vwap) };
     });
   },
   async fetchCandles(symbol, resolution, sinceMs) {
@@ -294,12 +396,21 @@ const bitstamp: VenueAdapter = {
 
 export const ADAPTERS: Record<CexVenueId, VenueAdapter> = { binance, okx, coinbase, bybit, upbit, kraken, kucoin, gate, bitget, bitstamp };
 
-const pairListCache = new TtlCache<PairRef[]>();
+const instrumentCache = new TtlCache<Instrument[]>();
+
+export async function getVenueInstruments(venueId: CexVenueId): Promise<Instrument[]> {
+  const cached = instrumentCache.get(venueId);
+  if (cached) return cached;
+  const instruments = await ADAPTERS[venueId].listInstruments();
+  if (instruments.length > 0) instrumentCache.set(venueId, instruments, PAIR_LIST_TTL_MS);
+  return instruments;
+}
 
 export async function getVenuePairs(venueId: CexVenueId): Promise<PairRef[]> {
-  const cached = pairListCache.get(venueId);
-  if (cached) return cached;
-  const pairs = await ADAPTERS[venueId].listPairs();
-  if (pairs.length > 0) pairListCache.set(venueId, pairs, PAIR_LIST_TTL_MS);
-  return pairs;
+  const out: PairRef[] = [];
+  for (const i of await getVenueInstruments(venueId)) {
+    const tracked = toTrackedPair(i.base, i.quote);
+    if (tracked) out.push({ ...tracked, symbol: i.symbol });
+  }
+  return out;
 }
