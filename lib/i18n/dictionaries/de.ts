@@ -55,6 +55,9 @@ const de = {
   },
 
   news: {
+    sentimentPositive: "Positiv",
+    sentimentNegative: "Negativ",
+    sentimentHint: "Tendenz anhand von Schlüsselwörtern in Überschrift und Auszug (z. B. Rally, Zulassung vs. Hack, Klage) — kein Handelssignal.",
     viewLatest: "Aktuell",
     viewStories: "Themen",
     viewWatchlist: "Watchlist",

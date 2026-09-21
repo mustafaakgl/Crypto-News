@@ -4,7 +4,7 @@ import { detectAssets } from "@/lib/assets";
 export type NewsItem = {
   id: string;
   title: string;
-  summary: string; // truncated, for cards
+  summary: string; // the publisher's full excerpt (usually one or two sentences), shown on cards
   descriptionFull: string; // untruncated RSS description, for the detail view
   url: string;
   sourceName: string;
@@ -66,11 +66,6 @@ function stripHtml(html: string): string {
     .replace(/&#8211;/g, "–")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function truncate(text: string, max: number): string {
-  if (text.length <= max) return text;
-  return text.slice(0, max - 1).trimEnd() + "…";
 }
 
 function asText(value: unknown): string {
@@ -136,7 +131,7 @@ async function fetchFeed(feed: FeedConfig): Promise<NewsItem[]> {
     return {
       id: link ? `${feed.id}:${link}` : `${feed.id}:${index}:${title}`,
       title,
-      summary: truncate(description, 220),
+      summary: description,
       descriptionFull: description,
       url: link,
       sourceName: feed.sourceName,

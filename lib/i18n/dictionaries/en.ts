@@ -54,6 +54,9 @@ const en = {
   },
 
   news: {
+    sentimentPositive: "Positive",
+    sentimentNegative: "Negative",
+    sentimentHint: "Tone read from keywords in the headline and excerpt (e.g. rally, approval vs. hack, lawsuit) — not a trading signal.",
     viewLatest: "Latest",
     viewStories: "Stories",
     viewWatchlist: "Watchlist",
