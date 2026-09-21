@@ -333,7 +333,7 @@ const en = {
     backLink: "← Asset analytics",
     heading: "Exchange Analytics",
     subheading:
-      "Centralized (CEX) vs decentralized (DEX) spot trading volume, and exchange-level inflow/outflow — no futures/perpetuals, no LLM-generated commentary.",
+      "Spot trading volume on centralized (CEX) and decentralized (DEX) exchanges, stablecoin flows on tracked exchange wallets, and price gaps between the two kinds of market — no futures/perpetuals, no LLM-generated commentary.",
     ariaView: "Exchange analytics view",
     tabVolume: "Volume",
     tabFlows: "Flows",
@@ -434,6 +434,8 @@ const en = {
   },
 
   flows: {
+    heading: "Exchange Flows",
+    scopeLine: "Tracked wallets · Ethereum · Partial coverage",
     asset: "Asset",
     network: "Network",
     ariaSelectAsset: "Select asset",
@@ -442,31 +444,55 @@ const en = {
     loading: "Loading…",
     error: "Could not load exchange flow data right now.",
     notAvailableYet: "Exchange flow data is not available yet.",
-    dataAvailableForN: (n: number, total: number) => `Data available for ${n} of ${total} selected exchanges.`,
-    sourceLine: (source: string, start: string, end: string, asset: string, networkSuffix: string) =>
-      `Source: ${source} · Window: ${start} – ${end} (Europe/Berlin) · Unit: ${asset}${networkSuffix}`,
-    onNetworkSuffix: (network: string) => ` on ${network}`,
+    partialData: (warnings: string) => `Partial data: ${warnings}`,
+    sourceLine: (source: string, period: string, start: string, end: string, dataThrough: string) =>
+      `Source: ${source} · ${period}: ${start} – ${end} (UTC, complete days) · transfers ingested through ${dataThrough}`,
     colExchange: "Exchange",
+    colAsset: "Asset",
+    colNetwork: "Network",
     colInflow: "Inflow",
     colOutflow: "Outflow",
-    colNetflow: "Netflow",
-    colCoverage: "Coverage",
+    colNetflow: "Net flow",
+    colBetweenExchanges: "Of which, other exchanges",
+    colInternal: "Own wallets (excluded)",
     colUpdated: "Updated",
-    tableCaption: (asset: string, period: string) => `Exchange ${asset} flows for ${period}`,
-    available: "Available",
-    unavailable: "Unavailable",
+    betweenIn: (v: string) => `in ${v}`,
+    betweenOut: (v: string) => `out ${v}`,
+    notTracked: "Not tracked yet — wallet coverage for this exchange hasn't been checked.",
+    notCollected: "Not enough collected history for this period yet.",
+    historyTooShort: (from: string, needed: string) => `Flow history is collected from ${from}; this period needs data from ${needed}.`,
+    tableCaption: (asset: string, period: string) => `Exchange ${asset} flows on tracked wallets for ${period}`,
     dailyLoading: "Loading daily flows…",
     dailyError: "Could not load a daily breakdown for this exchange right now.",
     dailyEmpty: "No daily breakdown available for this exchange.",
     colDateUtc: "Date (UTC)",
-    summarySentence: (direction: string, n: number) =>
-      `${direction} across the ${n} exchange${n === 1 ? "" : "s"} with data — this describes reported wallet movement, not a trading signal, confidence score, or price forecast.`,
     howToReadThis: "How to read this",
-    netflowExplanation:
-      "Netflow = Inflow − Outflow, computed only when the source reports both for the exact same asset, network, period and methodology. A transfer between the SAME exchange's own wallets is not new money entering or leaving the market — see the source's own methodology for how it filters those out. This total is never combined across exchanges into a single \"new money entering crypto\" figure.",
-    moreEnteredThanLeft: "More crypto entered than left",
-    moreLeftThanEntered: "More crypto left than entered",
-    inflowOutflowEqual: "Inflow and outflow were equal",
+    methodology: [
+      [
+        "What is counted",
+        "USDT and USDC transfers on Ethereum into and out of wallets Dune labels as belonging to each exchange (cex.addresses). Net flow = inflow − outflow. Amounts are in token units; both are USD-pegged stablecoins.",
+      ],
+      [
+        "Own wallets",
+        "Transfers between two wallets of the same exchange (e.g. hot ↔ cold) are excluded from inflow and outflow and shown separately — they would otherwise roughly double both.",
+      ],
+      [
+        "Other exchanges",
+        "The part of inflow/outflow whose other side is a different labeled exchange. This is money moving between exchanges, not money entering or leaving the market. It only catches exchange-labeled wallets on both sides: a transfer to another exchange's customer deposit address isn't labeled and counts as an ordinary outflow.",
+      ],
+      [
+        "Partial coverage",
+        "Only labeled hot and cold wallets are tracked, not the per-customer deposit addresses, so a deposit is seen when the exchange sweeps it into a labeled wallet. The labels were last extended in August 2025, so wallets added since are missing: figures are a lower bound, not an exchange's total.",
+      ],
+      [
+        "What this is not",
+        "Not bank deposits or withdrawals in USD/EUR (on-chain data can't see those), not trading volume, and not a trading signal. Flows aren't added up across exchanges into a single \"new money\" figure.",
+      ],
+      [
+        "Updates",
+        "The server runs one Dune query a day for all tracked exchanges and tokens and stores the result; every visitor reads the stored data. The last few days are re-fetched on each run to pick up late corrections.",
+      ],
+    ],
   },
 
   priceComparison: {

@@ -41,3 +41,10 @@ export function formatFundingPct(value: number): string {
 export function formatQuantity(value: number, symbol: string): string {
   return `${value.toLocaleString("en-GB", { maximumFractionDigits: 2 })} ${symbol}`;
 }
+
+// "3.61B USDT" — for token amounts too large to read digit by digit.
+export function formatCompactQuantity(value: number, symbol: string, locale = "en-GB"): string {
+  const abs = Math.abs(value);
+  const [div, suffix] = abs >= 1e9 ? [1e9, "B"] : abs >= 1e6 ? [1e6, "M"] : abs >= 1e3 ? [1e3, "K"] : [1, ""];
+  return `${(value / div).toLocaleString(locale, { maximumFractionDigits: div === 1 ? 0 : 2 })}${suffix} ${symbol}`;
+}

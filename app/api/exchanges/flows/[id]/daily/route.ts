@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const networkParam = req.nextUrl.searchParams.get("network");
   const periodParam = req.nextUrl.searchParams.get("period");
 
-  const asset: FlowAsset = isAsset(assetParam) ? assetParam : "BTC";
+  const asset: FlowAsset = isAsset(assetParam) ? assetParam : FLOW_ASSETS[0];
   const period: ExchangePeriod = isPeriod(periodParam) ? periodParam : "1d";
   const validNetworks = FLOW_NETWORKS_BY_ASSET[asset];
   const requestedNetwork = networkParam === "" || networkParam === null ? null : (networkParam as FlowNetwork);

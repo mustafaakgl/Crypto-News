@@ -1,6 +1,8 @@
 import "server-only";
 import { collectVenueDaily } from "@/lib/collector/cexDaily";
 import { collectDexCandles } from "@/lib/collector/dexCandles";
+import { collectDuneFlows, flowsCollectionDue } from "@/lib/collector/duneFlows";
+import { duneConfigured } from "@/lib/exchangeFlows/duneClient";
 import { CEX_VENUES, type CexVenueId } from "@/lib/exchangeVolume/venues";
 import { getDb, toDay } from "@/lib/store/db";
 
@@ -8,6 +10,8 @@ const TICK_MS = 10 * 60 * 1000;
 // Give exchanges a few minutes after 00:00 UTC to finalize the previous day's candle.
 const DAILY_AFTER_MS = 15 * 60 * 1000;
 const DEX_EVERY_MS = 60 * 60 * 1000;
+// Dune ingests Ethereum transfers with some lag; before 01:00 UTC yesterday is rarely complete yet.
+const FLOWS_AFTER_MS = 60 * 60 * 1000;
 
 const INTERRUPTED = "interrupted by restart";
 
@@ -58,6 +62,15 @@ function dexDue(nowMs: number): boolean {
   return !last || nowMs - last.started_at >= DEX_EVERY_MS - 60_000;
 }
 
+// Each attempt costs Dune credits, so a day that isn't complete yet is retried at most hourly.
+function flowsDue(nowMs: number): boolean {
+  if (!duneConfigured() || nowMs % 86_400_000 < FLOWS_AFTER_MS || !flowsCollectionDue(nowMs)) return false;
+  const last = getDb()
+    .prepare("SELECT started_at FROM collection_runs WHERE job = 'dune_flows' AND coalesce(detail, '') != ? ORDER BY started_at DESC LIMIT 1")
+    .get(INTERRUPTED) as { started_at: number } | undefined;
+  return !last || nowMs - last.started_at > 60 * 60 * 1000;
+}
+
 function tick() {
   const nowMs = Date.now();
   for (const venue of CEX_VENUES) {
@@ -69,6 +82,20 @@ function tick() {
         const r = await collectVenueDaily(venue.id);
         finishRun(id, r.pairsFailed === 0 ? "ok" : "partial", r.pairsListed - r.pairsFailed, r.pairsFailed, r.rowsWritten, r.errors.slice(0, 20).join("\n") || null);
         console.log(`[collector] ${venue.id}: ${r.rowsWritten} rows, ${r.pairsFailed}/${r.pairsListed} pairs failed, ${r.daysRecomputed} days totaled`);
+      } catch (err) {
+        finishRun(id, "error", 0, 0, 0, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+    });
+  }
+  if (flowsDue(nowMs)) {
+    void runExclusive("dune_flows", async () => {
+      const id = startRun("dune_flows", "ethereum");
+      try {
+        const r = await collectDuneFlows();
+        const detail = `credits=${r.credits ?? "?"} from=${r.fromDay} through=${r.completeThrough ?? "none"} execution=${r.executionId}`;
+        finishRun(id, r.completeThrough ? "ok" : "partial", r.rowsWritten, 0, r.rowsWritten, detail);
+        console.log(`[collector] dune flows: ${detail}`);
       } catch (err) {
         finishRun(id, "error", 0, 0, 0, err instanceof Error ? err.message : String(err));
         throw err;

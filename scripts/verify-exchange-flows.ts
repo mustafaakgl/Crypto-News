@@ -7,7 +7,6 @@ import {
   validateFlowDailySeries,
   netflow,
   summarizeCoverage,
-  describeNetflowDirection,
   sumAvailable,
   targetCompleteDaysForFlowPeriod,
   DAY_MS,
@@ -86,19 +85,12 @@ function isoDate(daysFromEpoch: number): string {
   assertEqual(netflow(0, 0), 0, "netflow: a genuine reported zero on both sides is a real 0, not null");
 }
 
-// ---- describeNetflowDirection: exact required phrasing, descriptive only ----
-{
-  assertEqual(describeNetflowDirection(120), "More crypto entered than left", "describeNetflowDirection: positive netflow phrasing matches the required wording exactly");
-  assertEqual(describeNetflowDirection(-45), "More crypto left than entered", "describeNetflowDirection: negative netflow phrasing is the mirror image");
-  assertEqual(describeNetflowDirection(0), "Inflow and outflow were equal", "describeNetflowDirection: a genuine tie is its own distinct message, not lumped into either direction");
-}
-
 // ---- summarizeCoverage: real support count vs the full requested selection ----
 {
   const rows: ExchangeFlowRow[] = [
-    { exchangeId: "a", exchangeName: "A", inflow: 1, outflow: 1, netflow: 0, coverage: "available", updatedAt: null },
-    { exchangeId: "b", exchangeName: "B", inflow: null, outflow: null, netflow: null, coverage: "unavailable", updatedAt: null },
-    { exchangeId: "c", exchangeName: "C", inflow: 2, outflow: 1, netflow: 1, coverage: "available", updatedAt: null },
+    { exchangeId: "a", exchangeName: "A", inflow: 1, outflow: 1, netflow: 0, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverage: "available", updatedAt: null },
+    { exchangeId: "b", exchangeName: "B", inflow: null, outflow: null, netflow: null, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverage: "unavailable", updatedAt: null },
+    { exchangeId: "c", exchangeName: "C", inflow: 2, outflow: 1, netflow: 1, inflowFromExchanges: null, outflowToExchanges: null, internalExcluded: null, coverage: "available", updatedAt: null },
   ];
   assertEqual(summarizeCoverage(rows), { supportedCount: 2, requestedCount: 3 }, "summarizeCoverage: counts only rows actually marked available, out of the full requested selection — this is what drives 'Data available for N of M selected exchanges'");
 }

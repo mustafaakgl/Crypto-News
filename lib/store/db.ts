@@ -55,6 +55,30 @@ CREATE TABLE IF NOT EXISTS dex_candles (
   PRIMARY KEY (asset, pool, resolution, start_ms)
 ) WITHOUT ROWID;
 
+-- Exchange wallet flows per day, in token units (USDT/USDC ≈ USD). Same-exchange transfers are
+-- kept only in \`internal\` and excluded from in/out; *_cex is the part whose other side is another exchange.
+CREATE TABLE IF NOT EXISTS exchange_flows_daily (
+  venue TEXT NOT NULL,
+  asset TEXT NOT NULL,
+  network TEXT NOT NULL,
+  day INTEGER NOT NULL,
+  inflow_ext REAL NOT NULL,
+  inflow_cex REAL NOT NULL,
+  outflow_ext REAL NOT NULL,
+  outflow_cex REAL NOT NULL,
+  internal REAL NOT NULL,
+  legs INTEGER NOT NULL,
+  PRIMARY KEY (venue, asset, network, day)
+) WITHOUT ROWID;
+
+CREATE TABLE IF NOT EXISTS flows_sync (
+  source TEXT PRIMARY KEY,
+  first_day INTEGER NOT NULL,
+  complete_through_day INTEGER NOT NULL,
+  data_through_ms INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS collection_runs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   job TEXT NOT NULL,

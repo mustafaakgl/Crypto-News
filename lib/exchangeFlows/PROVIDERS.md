@@ -1,12 +1,38 @@
-# Exchange Flows — provider research
+# Exchange Flows — data source
 
-The user-facing "Flows" tab only ever shows "Exchange flow data is not
-available yet." This file is the developer-facing record of *why*, and what
-it would take to change that. The same facts are also encoded as data in
-[`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`) — this file is
-the prose version for anyone reading the code who isn't parsing that array.
+The Flows tab shows USDT and USDC flows on Ethereum for exchanges whose wallet
+labels were checked, from Dune. This file records why Dune was chosen, what
+its limits are, and the alternatives that were evaluated. The same facts are
+encoded as data in [`provider.ts`](./provider.ts) (`FLOW_PROVIDER_CANDIDATES`).
 
-## Candidates evaluated (2026-09, docs read, no account created, no plan started)
+## In use: Dune (free plan, API key on the server)
+
+- SQL in [`duneSql.ts`](./duneSql.ts) over `cex.addresses` (wallet labels) and
+  `tokens.transfers`, run once a day by the collector
+  ([`lib/collector/duneFlows.ts`](../collector/duneFlows.ts)) and stored in
+  SQLite; visitors only read the stored rows.
+- Needs `DUNE_API_KEY` (server env, never sent to the client) and
+  `COLLECTOR_ENABLED=1`. Free accounts created after 2026-07-21 get 2,500
+  credits/month and API access; older free accounts became view-only on
+  2026-09-10.
+- Measured cost (2026-09-21): coverage check 1.37 credits; Binance · USDT ·
+  7 days 1.12; Binance/OKX/Bybit × USDT/USDC × 7 days 0.48.
+- Label coverage checked for Ethereum: Binance 136, OKX 217, Bybit 45 labeled
+  wallets, none shared between exchanges; Binance US is labeled separately
+  and not merged into Binance. The newest label was added 2025-08, so
+  wallets opened since then are missing and figures are a lower bound.
+- Labels cover exchange hot/cold wallets, not per-customer deposit
+  addresses: a deposit is seen when it's swept into a labeled wallet, and a
+  transfer to another exchange's deposit address counts as an ordinary
+  outflow rather than an exchange-to-exchange one.
+- Same-exchange transfers are large (Binance USDT: $2.68B over the 7 days
+  tested, about as much as its inflow) and are excluded from in/out.
+- `cex.flows` (Dune's own curated table) wasn't used because it doesn't
+  document how it handles same-exchange transfers.
+- Not covered: Bitcoin (not in Dune's curated CEX flows), bank deposits and
+  withdrawals in USD/EUR (not visible on-chain).
+
+## Alternatives evaluated (2026-09, docs read, no account created, no plan started)
 
 ### Glassnode — blocked: requires a new paid plan
 
@@ -38,19 +64,12 @@ the prose version for anyone reading the code who isn't parsing that array.
   inflows — not a centralized exchange's wallet flows.
 - Docs: <https://api-docs.defillama.com/>
 
-## What would unblock this
+## Extending coverage
 
-1. Someone decides to pay for Glassnode Professional or CryptoQuant
-   Professional (or a comparable provider not yet evaluated).
-2. A server-side API key is added as an env var (never sent to the client).
-3. Implement `FlowsProvider` (see `provider.ts`) against that key and swap
-   it in via `getFlowsProvider()` — the type contract, computation layer
-   (`flowsMath.ts`), and UI (`components/exchanges/FlowsTab.tsx`) are
-   already built against that interface and shouldn't need to change.
-
-## Why the UI doesn't show this
-
-Earlier iterations surfaced this whole evaluation directly on the page. It
-was accurate but is developer/decision-maker context, not something an end
-user opening the Flows tab needs — a short "not available yet" is the
-honest, minimal-noise version of the same fact for that audience.
+1. Another exchange: check its Ethereum labels in `cex.addresses` against the
+   wallet list it publishes (e.g. proof-of-reserves) before adding it to
+   `DUNE_TRACKED_VENUES`.
+2. Bitcoin flows: needs a paid provider (Glassnode or CryptoQuant
+   Professional); implement `FlowsProvider` against it.
+3. 1Y: the collector backfills 30 days; extend `BACKFILL_DAYS` once the
+   credit cost of a longer window has been measured.

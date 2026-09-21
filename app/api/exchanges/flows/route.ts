@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const periodParam = req.nextUrl.searchParams.get("period");
   const countParam = req.nextUrl.searchParams.get("count");
 
-  const asset: FlowAsset = isAsset(assetParam) ? assetParam : "BTC";
+  const asset: FlowAsset = isAsset(assetParam) ? assetParam : FLOW_ASSETS[0];
   const period: ExchangePeriod = isPeriod(periodParam) ? periodParam : "1d";
   const count: VenueCount = isCount(countParam) ? (Number(countParam) as VenueCount) : 5;
 

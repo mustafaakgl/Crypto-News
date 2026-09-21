@@ -1,6 +1,7 @@
 import "server-only";
 import type { ExchangePeriod } from "@/lib/exchangeAnalytics/types";
 import type { ExchangeFlowsResult, ExchangeFlowDailySeries, FlowAsset, FlowNetwork, FlowProviderCandidate } from "@/lib/exchangeFlows/types";
+import { StoredFlowsProvider, storedFlowsAvailable } from "@/lib/exchangeFlows/storedProvider";
 
 export type FlowsOverviewParams = {
   asset: FlowAsset;
@@ -19,21 +20,22 @@ export type FlowsDailySeriesParams = {
   period: ExchangePeriod;
 };
 
-// The provider contract every real adapter (Glassnode, CryptoQuant, ...)
-// implements. Swapping in a real provider is a one-line change in
-// getFlowsProvider() below — nothing else in the app depends on which
-// concrete provider is active.
+// The contract any flow source implements; the rest of the app doesn't
+// depend on which concrete provider is active.
 export interface FlowsProvider {
   getOverview(params: FlowsOverviewParams): Promise<ExchangeFlowsResult>;
   getDailySeries(params: FlowsDailySeriesParams): Promise<ExchangeFlowDailySeries>;
 }
 
-// Findings from the source research this feature's first pass required
-// (docs read, no paid plan or new account started — see the delivery
-// report for the full write-up). Kept as data, not prose buried in a
-// comment, so the same facts back both this fallback provider's response
-// and the UI's "why isn't this connected" panel — one source of truth.
+// Sources evaluated for exchange flows (see PROVIDERS.md). Dune is the one in use.
 export const FLOW_PROVIDER_CANDIDATES: FlowProviderCandidate[] = [
+  {
+    name: "Dune",
+    verdict: "supported",
+    blocker:
+      "In use for USDT/USDC on Ethereum: SQL over cex.addresses wallet labels and tokens.transfers, run by the server's collector with DUNE_API_KEY (free plan, 2,500 credits/month; a 3-exchange × 2-token daily refresh costs about 0.5 credits). No Bitcoin coverage in its curated flows, and wallet labels were last extended in 2025-08, so figures are a lower bound.",
+    docsUrl: "https://docs.dune.com/data-catalog/curated/cex-flows/addresses",
+  },
   {
     name: "Glassnode",
     verdict: "requires_new_paid_plan",
@@ -58,7 +60,7 @@ export const FLOW_PROVIDER_CANDIDATES: FlowProviderCandidate[] = [
 ];
 
 const NOT_CONFIGURED_REASON =
-  "No exchange flow data source is connected in this deployment. Of the three candidates evaluated (Glassnode, CryptoQuant, DefiLlama), none offer real inflow/outflow/netflow data without either a new paid subscription or a new account — both out of scope for this task. See the candidates below for the specific blocker and source for each.";
+  "Exchange flow collection hasn't run on this server yet (it needs DUNE_API_KEY and COLLECTOR_ENABLED=1), so there is no stored data to show.";
 
 class NotConfiguredFlowsProvider implements FlowsProvider {
   async getOverview(params: FlowsOverviewParams): Promise<ExchangeFlowsResult> {
@@ -77,10 +79,7 @@ class NotConfiguredFlowsProvider implements FlowsProvider {
   }
 }
 
-// A real adapter would read its own env var here (e.g. GLASSNODE_API_KEY)
-// and only activate if present — server-side only, never sent to the
-// client. Today, no such variable is set for any evaluated provider, so
-// this always resolves to the honest not-configured provider.
+// Visitors only ever read what the collector stored; no request reaches Dune from here.
 export function getFlowsProvider(): FlowsProvider {
-  return new NotConfiguredFlowsProvider();
+  return storedFlowsAvailable() ? new StoredFlowsProvider() : new NotConfiguredFlowsProvider();
 }

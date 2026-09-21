@@ -67,14 +67,6 @@ export function summarizeCoverage(rows: ExchangeFlowRow[]): { supportedCount: nu
   return { supportedCount: rows.filter((r) => r.coverage === "available").length, requestedCount: rows.length };
 }
 
-// Matches the ticket's required phrasing exactly — descriptive only, never
-// a trade signal, confidence score, or price target.
-export function describeNetflowDirection(value: number): string {
-  if (value > 0) return "More crypto entered than left";
-  if (value < 0) return "More crypto left than entered";
-  return "Inflow and outflow were equal";
-}
-
 export function sumAvailable(values: (number | null)[]): number | null {
   const present = values.filter((v): v is number => v !== null);
   if (present.length === 0) return null;

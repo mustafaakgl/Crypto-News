@@ -40,7 +40,7 @@ export function ExchangeAnalyticsClient() {
   const tab: ExchangeAnalyticsTab = isTab(searchParams.get("tab")) ? (searchParams.get("tab") as ExchangeAnalyticsTab) : "volume";
   const period: ExchangePeriod = isPeriod(searchParams.get("period")) ? (searchParams.get("period") as ExchangePeriod) : "1d";
   const count: VenueCount = isCount(searchParams.get("count")) ? (Number(searchParams.get("count")) as VenueCount) : 5;
-  const asset: FlowAsset = isAsset(searchParams.get("asset")) ? (searchParams.get("asset") as FlowAsset) : "BTC";
+  const asset: FlowAsset = isAsset(searchParams.get("asset")) ? (searchParams.get("asset") as FlowAsset) : FLOW_ASSETS[0];
   const validNetworks = FLOW_NETWORKS_BY_ASSET[asset];
   const requestedNetwork = searchParams.get("network") as FlowNetwork;
   const network: FlowNetwork = validNetworks.includes(requestedNetwork) ? requestedNetwork : validNetworks[0];
@@ -60,7 +60,7 @@ export function ExchangeAnalyticsClient() {
     if (nextPeriod !== "1d") params.set("period", nextPeriod);
     if (nextCount !== 5) params.set("count", String(nextCount));
     if (nextTab === "flows") {
-      if (nextAsset !== "BTC") params.set("asset", nextAsset);
+      if (nextAsset !== FLOW_ASSETS[0]) params.set("asset", nextAsset);
       if (nextNetwork && nextNetwork !== nextAssetNetworks[0]) params.set("network", nextNetwork);
     }
     const qs = params.toString();

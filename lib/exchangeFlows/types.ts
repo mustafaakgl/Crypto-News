@@ -1,25 +1,16 @@
 import type { ExchangePeriod } from "@/lib/exchangeAnalytics/types";
 
-// First-wave supported assets only — genuinely usable combinations, never
-// a placeholder that implies broader coverage than any real provider gives.
-export type FlowAsset = "BTC" | "ETH" | "USDT" | "USDC";
+// Only what's actually collected: stablecoins on Ethereum (see lib/exchangeFlows/duneSql.ts).
+export type FlowAsset = "USDT" | "USDC";
 
-// Only meaningful for multi-chain assets (USDT/USDC exist on many chains;
-// BTC/ETH are effectively single-network for this purpose). null means
-// "not applicable" for BTC/ETH, never "all networks combined" — a
-// provider's USDT-on-Ethereum figure is never presented as USDT-wide.
+// Always explicit, so a USDT-on-Ethereum figure is never presented as USDT across all chains.
 export type FlowNetwork = "bitcoin" | "ethereum" | "tron" | "solana" | null;
 
-export const FLOW_ASSETS: FlowAsset[] = ["BTC", "ETH", "USDT", "USDC"];
+export const FLOW_ASSETS: FlowAsset[] = ["USDT", "USDC"];
 
-// Networks a stablecoin might realistically be tracked on — a provider is
-// never assumed to cover all of these; getFlowsProviderCapabilities()
-// (or the provider's own not_configured response) states what's real.
 export const FLOW_NETWORKS_BY_ASSET: Record<FlowAsset, FlowNetwork[]> = {
-  BTC: [null],
-  ETH: [null],
-  USDT: ["ethereum", "tron", "solana"],
-  USDC: ["ethereum", "solana"],
+  USDT: ["ethereum"],
+  USDC: ["ethereum"],
 };
 
 export type FlowRowCoverage = "available" | "unavailable";
@@ -36,7 +27,14 @@ export type ExchangeFlowRow = {
   // when the provider gives both for the SAME asset/network/period — never
   // derived by this app when the provider only exposes an aggregate.
   netflow: number | null;
+  // Parts of inflow/outflow whose other side is a different labeled exchange —
+  // money moving between exchanges, not entering or leaving the market.
+  inflowFromExchanges: number | null;
+  outflowToExchanges: number | null;
+  // Transfers between this exchange's own wallets; excluded from inflow/outflow.
+  internalExcluded: number | null;
   coverage: FlowRowCoverage;
+  unavailableReason?: "not_tracked" | "not_collected";
   // The provider's own data timestamp for this row (when its last
   // observation was), not this server's fetch time.
   updatedAt: string | null;
@@ -70,8 +68,9 @@ export type ExchangeFlowsResult =
       requestedCount: number;
       supportedCount: number; // rows with coverage === "available"
       source: string;
-      methodologyNote: string;
-      networkScopeNote: string;
+      collectedFrom: string; // YYYY-MM-DD, first day in the stored history
+      historyNeededFrom: string | null; // YYYY-MM-DD when the period starts before collectedFrom
+      dataThrough: string; // ISO, newest transfer the source had ingested at the last run
       asOf: string;
       warnings: string[];
     }
